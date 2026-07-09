@@ -39,17 +39,32 @@ jobs:
       - name: Locate and zip build output
         shell: pwsh
         run: |
-          $releaseDir = Get-ChildItem -Path build\windows -Recurse -Directory -Filter "Release" | Select-Object -First 1
+          $ws = $env:GITHUB_WORKSPACE
+          Write-Host "Workspace: $ws"
+          $releaseDir = Get-ChildItem -Path (Join-Path $ws "build\windows") -Recurse -Directory -Filter "Release" -ErrorAction SilentlyContinue | Select-Object -First 1
           if (-not $releaseDir) {
-            Write-Error "Could not find Release output folder under build\windows"
+            Write-Error "Could not find a Release output folder under build\windows"
+            Write-Host "Contents of build\windows (if any):"
+            Get-ChildItem -Path (Join-Path $ws "build") -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host " - $($_.FullName)" }
             exit 1
           }
-          Write-Host "Zipping $($releaseDir.FullName)"
-          Compress-Archive -Path "$($releaseDir.FullName)\*" -DestinationPath SMDB-Windows.zip
+          Write-Host "Found release dir: $($releaseDir.FullName)"
+          Get-ChildItem -Path $releaseDir.FullName -Recurse | ForEach-Object { Write-Host " - $($_.FullName)" }
+
+          $zipPath = Join-Path $ws "SMDB-Windows.zip"
+          Compress-Archive -Path (Join-Path $releaseDir.FullName "*") -DestinationPath $zipPath -Force
+
+          if (-not (Test-Path $zipPath)) {
+            Write-Error "Zip file was not created at $zipPath"
+            exit 1
+          }
+          $size = (Get-Item $zipPath).Length
+          Write-Host "Created zip at $zipPath ($size bytes)"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: SMDB-Windows
-          path: SMDB-Windows.zip
+          path: ${{ github.workspace }}\SMDB-Windows.zip
+          if-no-files-found: error
           retention-days: 30
