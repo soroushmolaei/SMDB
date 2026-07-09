@@ -30,7 +30,8 @@ jobs:
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Analyze (non-blocking)
-        run: flutter analyze || echo "Analyzer reported issues, continuing build"
+        run: flutter analyze
+        continue-on-error: true
 
       - name: Build Windows release
         run: flutter build windows --release
