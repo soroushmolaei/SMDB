@@ -41,18 +41,26 @@ jobs:
         run: |
           $ws = $env:GITHUB_WORKSPACE
           Write-Host "Workspace: $ws"
-          $releaseDir = Get-ChildItem -Path (Join-Path $ws "build\windows") -Recurse -Directory -Filter "Release" -ErrorAction SilentlyContinue | Select-Object -First 1
-          if (-not $releaseDir) {
-            Write-Error "Could not find a Release output folder under build\windows"
-            Write-Host "Contents of build\windows (if any):"
-            Get-ChildItem -Path (Join-Path $ws "build") -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host " - $($_.FullName)" }
+          $buildWindows = Join-Path $ws "build\windows"
+
+          $exe = Get-ChildItem -Path $buildWindows -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+            Where-Object { $_.FullName -like "*\runner\Release\*" } |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            Write-Error "Could not find a built .exe under build\windows\...\runner\Release"
+            Write-Host "All .exe files found under build\windows:"
+            Get-ChildItem -Path $buildWindows -Recurse -Filter "*.exe" -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host " - $($_.FullName)" }
             exit 1
           }
-          Write-Host "Found release dir: $($releaseDir.FullName)"
-          Get-ChildItem -Path $releaseDir.FullName -Recurse | ForEach-Object { Write-Host " - $($_.FullName)" }
+
+          $releaseDir = $exe.DirectoryName
+          Write-Host "Found release dir: $releaseDir"
+          Get-ChildItem -Path $releaseDir -Recurse | ForEach-Object { Write-Host " - $($_.FullName)" }
 
           $zipPath = Join-Path $ws "SMDB-Windows.zip"
-          Compress-Archive -Path (Join-Path $releaseDir.FullName "*") -DestinationPath $zipPath -Force
+          Compress-Archive -Path (Join-Path $releaseDir "*") -DestinationPath $zipPath -Force
 
           if (-not (Test-Path $zipPath)) {
             Write-Error "Zip file was not created at $zipPath"
