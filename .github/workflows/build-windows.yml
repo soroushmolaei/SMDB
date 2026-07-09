@@ -1,0 +1,54 @@
+name: Build Windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable Windows desktop support
+        run: flutter config --enable-windows-desktop
+
+      - name: Scaffold Windows platform folder
+        run: flutter create --platforms=windows .
+
+      - name: Get packages
+        run: flutter pub get
+
+      - name: Generate Drift code
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze (non-blocking)
+        run: flutter analyze || echo "Analyzer reported issues, continuing build"
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Locate and zip build output
+        shell: pwsh
+        run: |
+          $releaseDir = Get-ChildItem -Path build\windows -Recurse -Directory -Filter "Release" | Select-Object -First 1
+          if (-not $releaseDir) {
+            Write-Error "Could not find Release output folder under build\windows"
+            exit 1
+          }
+          Write-Host "Zipping $($releaseDir.FullName)"
+          Compress-Archive -Path "$($releaseDir.FullName)\*" -DestinationPath SMDB-Windows.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SMDB-Windows
+          path: SMDB-Windows.zip
+          retention-days: 30
