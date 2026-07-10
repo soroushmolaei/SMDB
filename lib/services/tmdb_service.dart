@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -109,15 +110,30 @@ class TmdbService {
   });
 
   http.Client _buildClient() {
-    if (proxyHost == null ||
-        proxyHost!.isEmpty ||
-        proxyPort == null ||
-        proxyPort == 0) {
-      return http.Client();
-    }
     final httpClient = HttpClient();
-    httpClient.findProxy = (uri) => 'PROXY $proxyHost:$proxyPort';
-    httpClient.badCertificateCallback = (cert, host, port) => false;
+    httpClient.connectionTimeout = const Duration(seconds: 10);
+
+    // Prefer IPv4 when connecting. If a browser can reach a host instantly
+    // but dart:io hangs until timeout, it is almost always a broken/
+    // blackholed IPv6 route: browsers fall back to IPv4 quickly (Happy
+    // Eyeballs), dart:io does not do this as reliably. Resolving manually
+    // and connecting to an IPv4 address directly avoids that hang.
+    httpClient.connectionFactory = (uri, proxyHost, proxyPort) async {
+      final targetHost = proxyHost ?? uri.host;
+      final targetPort = proxyPort ?? uri.port;
+      final addresses = await InternetAddress.lookup(targetHost);
+      final ipv4 = addresses.where((a) => a.type == InternetAddressType.IPv4);
+      final target = ipv4.isNotEmpty ? ipv4.first : addresses.first;
+      return Socket.startConnect(target, targetPort);
+    };
+
+    if (proxyHost != null &&
+        proxyHost!.isNotEmpty &&
+        proxyPort != null &&
+        proxyPort != 0) {
+      httpClient.findProxy = (uri) => 'PROXY $proxyHost:$proxyPort';
+      httpClient.badCertificateCallback = (cert, host, port) => false;
+    }
     return IOClient(httpClient);
   }
 
@@ -144,8 +160,13 @@ class TmdbService {
           as Map<String, dynamic>;
     } on SocketException {
       throw TmdbException(
-        'Could not reach TMDB. If you are on a filtered network, set a '
-        'proxy in Settings.',
+        'Could not reach TMDB (connection failed). If you are on a '
+        'filtered network, set a proxy in Settings.',
+      );
+    } on TimeoutException {
+      throw TmdbException(
+        'TMDB took too long to respond (20s timeout). If this keeps '
+        'happening, try setting a proxy in Settings.',
       );
     } finally {
       client.close();
