@@ -122,6 +122,53 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 ),
               ),
             ),
+          if (scanState.status == ScanStatus.done && scanState.total > 0)
+            Container(
+              width: double.infinity,
+              margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: scanState.networkErrors > 0
+                    ? Colors.red.shade900
+                    : Colors.green.shade900,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    scanState.networkErrors > 0
+                        ? 'Scan finished: ${scanState.matched}/${scanState.total} '
+                            'matched with TMDB, ${scanState.networkErrors} failed '
+                            'to reach TMDB.'
+                        : 'Scan finished: ${scanState.matched}/${scanState.total} '
+                            'matched with TMDB.',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  if (scanState.networkErrors > 0 &&
+                      scanState.lastError != null) ...[
+                    const SizedBox(height: 4),
+                    Text(
+                      scanState.lastError!,
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'If TMDB is blocked on your network, set a proxy in '
+                      'Settings. Files were still added to your library '
+                      'without posters.',
+                      style: TextStyle(color: Colors.white70, fontSize: 12),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: TextField(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../services/tmdb_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +16,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _proxyHostController = TextEditingController();
   final _proxyPortController = TextEditingController();
   bool _loaded = false;
+  bool _testing = false;
+  String? _testResult;
+  bool _testOk = false;
 
   @override
   void dispose() {
@@ -42,6 +46,48 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Settings saved')),
       );
+    }
+  }
+
+  Future<void> _testConnection() async {
+    final apiKey = _apiKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _testResult = 'Enter an API key first.';
+        _testOk = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _testing = true;
+      _testResult = null;
+    });
+
+    final proxyHost = _proxyHostController.text.trim();
+    final proxyPort = int.tryParse(_proxyPortController.text.trim());
+    final tmdb = TmdbService(
+      apiKey: apiKey,
+      proxyHost: proxyHost.isEmpty ? null : proxyHost,
+      proxyPort: proxyPort,
+    );
+
+    try {
+      final results = await tmdb.searchMovie('Inception');
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testOk = true;
+        _testResult = 'Connected — got ${results.length} results back from '
+            'TMDB for a test search.';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _testing = false;
+        _testOk = false;
+        _testResult = e.toString();
+      });
     }
   }
 
@@ -102,10 +148,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              FilledButton(
-                onPressed: _save,
-                child: const Text('Save'),
+              Row(
+                children: [
+                  FilledButton(
+                    onPressed: _save,
+                    child: const Text('Save'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: _testing ? null : _testConnection,
+                    child: _testing
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Test Connection'),
+                  ),
+                ],
               ),
+              if (_testResult != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    _testResult!,
+                    style: TextStyle(
+                      color: _testOk
+                          ? Colors.greenAccent.shade400
+                          : Colors.redAccent.shade100,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
               const SizedBox(height: 32),
               const Text(
                 'Library Folders',
