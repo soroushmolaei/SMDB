@@ -88,6 +88,14 @@ class TmdbShowResult {
   }
 }
 
+/// Internal marker for a connection-level failure that's worth retrying
+/// with a different connection strategy (as opposed to a real HTTP-level
+/// error from TMDB itself, which should not be retried).
+class _RetryableError implements Exception {
+  final String message;
+  _RetryableError(this.message);
+}
+
 /// Thin client for the TMDB (themoviedb.org) v3 REST API.
 ///
 /// If [proxyHost]/[proxyPort] are supplied, requests are routed through that
@@ -109,24 +117,7 @@ class TmdbService {
     this.language = 'en-US',
   });
 
-  http.Client _buildClient() {
-    final httpClient = HttpClient();
-    httpClient.connectionTimeout = const Duration(seconds: 10);
-
-    // Prefer IPv4 when connecting. If a browser can reach a host instantly
-    // but dart:io hangs until timeout, it is almost always a broken/
-    // blackholed IPv6 route: browsers fall back to IPv4 quickly (Happy
-    // Eyeballs), dart:io does not do this as reliably. Resolving manually
-    // and connecting to an IPv4 address directly avoids that hang.
-    httpClient.connectionFactory = (uri, proxyHost, proxyPort) async {
-      final targetHost = proxyHost ?? uri.host;
-      final targetPort = proxyPort ?? uri.port;
-      final addresses = await InternetAddress.lookup(targetHost);
-      final ipv4 = addresses.where((a) => a.type == InternetAddressType.IPv4);
-      final target = ipv4.isNotEmpty ? ipv4.first : addresses.first;
-      return Socket.startConnect(target, targetPort);
-    };
-
+  void _applyProxy(HttpClient httpClient) {
     if (proxyHost != null &&
         proxyHost!.isNotEmpty &&
         proxyPort != null &&
@@ -134,23 +125,44 @@ class TmdbService {
       httpClient.findProxy = (uri) => 'PROXY $proxyHost:$proxyPort';
       httpClient.badCertificateCallback = (cert, host, port) => false;
     }
+  }
+
+  /// Default connection strategy: let the OS/VPN stack pick the route, the
+  /// same way most other apps (and the system's own DNS) would.
+  http.Client _buildDefaultClient() {
+    final httpClient = HttpClient();
+    httpClient.connectionTimeout = const Duration(seconds: 8);
+    _applyProxy(httpClient);
     return IOClient(httpClient);
   }
 
-  Future<Map<String, dynamic>> _get(
+  /// Fallback strategy: resolve DNS manually and connect to an IPv4 address
+  /// directly. Helps on systems where dart:io hangs on a broken IPv6 route
+  /// that browsers quietly skip past.
+  http.Client _buildIPv4Client() {
+    final httpClient = HttpClient();
+    httpClient.connectionTimeout = const Duration(seconds: 8);
+    httpClient.connectionFactory = (uri, proxyHost, proxyPort) async {
+      final targetHost = proxyHost ?? uri.host;
+      final targetPort = proxyPort ?? uri.port;
+      final addresses = await InternetAddress.lookup(targetHost);
+      final ipv4 =
+          addresses.where((a) => a.type == InternetAddressType.IPv4);
+      final target = ipv4.isNotEmpty ? ipv4.first : addresses.first;
+      return Socket.startConnect(target, targetPort);
+    };
+    _applyProxy(httpClient);
+    return IOClient(httpClient);
+  }
+
+  Future<Map<String, dynamic>> _attempt(
+    Uri uri,
     String path,
-    Map<String, String> query,
+    http.Client client,
   ) async {
-    final client = _buildClient();
     try {
-      final uri = Uri.parse('$_baseUrl$path').replace(queryParameters: {
-        'api_key': apiKey,
-        'language': language,
-        ...query,
-      });
-      final response = await client.get(uri).timeout(
-            const Duration(seconds: 20),
-          );
+      final response =
+          await client.get(uri).timeout(const Duration(seconds: 9));
       if (response.statusCode != 200) {
         throw TmdbException(
           'TMDB request failed (${response.statusCode}) for $path',
@@ -158,19 +170,43 @@ class TmdbService {
       }
       return jsonDecode(utf8.decode(response.bodyBytes))
           as Map<String, dynamic>;
-    } on SocketException {
-      throw TmdbException(
-        'Could not reach TMDB (connection failed). If you are on a '
-        'filtered network, set a proxy in Settings.',
-      );
+    } on SocketException catch (e) {
+      throw _RetryableError(e.osError?.message ?? e.message);
     } on TimeoutException {
-      throw TmdbException(
-        'TMDB took too long to respond (20s timeout). If this keeps '
-        'happening, try setting a proxy in Settings.',
-      );
+      throw _RetryableError('timed out after 9s');
     } finally {
       client.close();
     }
+  }
+
+  Future<Map<String, dynamic>> _get(
+    String path,
+    Map<String, String> query,
+  ) async {
+    final uri = Uri.parse('$_baseUrl$path').replace(queryParameters: {
+      'api_key': apiKey,
+      'language': language,
+      ...query,
+    });
+
+    final errors = <String>[];
+
+    try {
+      return await _attempt(uri, path, _buildDefaultClient());
+    } on _RetryableError catch (e) {
+      errors.add('default: ${e.message}');
+    }
+
+    try {
+      return await _attempt(uri, path, _buildIPv4Client());
+    } on _RetryableError catch (e) {
+      errors.add('IPv4-direct: ${e.message}');
+    }
+
+    throw TmdbException(
+      'Could not reach TMDB after two attempts (${errors.join(" | ")}). '
+      'If you are on a filtered network, check your proxy in Settings.',
+    );
   }
 
   Future<List<TmdbMovieResult>> searchMovie(String query, {int? year}) async {
