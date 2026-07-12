@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
-import '../services/tmdb_service.dart';
 
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
@@ -22,9 +21,8 @@ class MovieDetailScreen extends ConsumerWidget {
             return const Center(child: Text('Movie not found'));
           }
 
-          final backdropUrl =
-              TmdbService.imageUrl(movie.backdropPath, size: 'w1280');
-          final posterUrl = TmdbService.imageUrl(movie.posterPath);
+          final backdropUrl = movie.backdropPath;
+          final posterUrl = movie.posterPath;
 
           return CustomScrollView(
             slivers: [

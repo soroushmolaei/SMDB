@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -13,16 +14,21 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _apiKeyController = TextEditingController();
+  final _omdbKeyController = TextEditingController();
   final _proxyHostController = TextEditingController();
   final _proxyPortController = TextEditingController();
   bool _loaded = false;
   bool _testing = false;
   String? _testResult;
   bool _testOk = false;
+  bool _omdbTesting = false;
+  String? _omdbTestResult;
+  bool _omdbTestOk = false;
 
   @override
   void dispose() {
     _apiKeyController.dispose();
+    _omdbKeyController.dispose();
     _proxyHostController.dispose();
     _proxyPortController.dispose();
     super.dispose();
@@ -31,6 +37,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void _loadIfNeeded(AppSettingsData data) {
     if (_loaded) return;
     _apiKeyController.text = data.tmdbApiKey ?? '';
+    _omdbKeyController.text = data.omdbApiKey ?? '';
     _proxyHostController.text = data.proxyHost ?? '';
     _proxyPortController.text = data.proxyPort?.toString() ?? '';
     _loaded = true;
@@ -39,6 +46,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _save() async {
     final db = ref.read(databaseProvider);
     await db.setSetting('tmdb_api_key', _apiKeyController.text.trim());
+    await db.setSetting('omdb_api_key', _omdbKeyController.text.trim());
     await db.setSetting('proxy_host', _proxyHostController.text.trim());
     await db.setSetting('proxy_port', _proxyPortController.text.trim());
     ref.invalidate(appSettingsProvider);
@@ -87,6 +95,49 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         _testing = false;
         _testOk = false;
         _testResult = e.toString();
+      });
+    }
+  }
+
+  Future<void> _testOmdbConnection() async {
+    final apiKey = _omdbKeyController.text.trim();
+    if (apiKey.isEmpty) {
+      setState(() {
+        _omdbTestResult = 'Enter an OMDb API key first.';
+        _omdbTestOk = false;
+      });
+      return;
+    }
+
+    setState(() {
+      _omdbTesting = true;
+      _omdbTestResult = null;
+    });
+
+    final proxyHost = _proxyHostController.text.trim();
+    final proxyPort = int.tryParse(_proxyPortController.text.trim());
+    final omdb = OmdbService(
+      apiKey: apiKey,
+      proxyHost: proxyHost.isEmpty ? null : proxyHost,
+      proxyPort: proxyPort,
+    );
+
+    try {
+      final result = await omdb.lookupMovie('Inception');
+      if (!mounted) return;
+      setState(() {
+        _omdbTesting = false;
+        _omdbTestOk = result != null;
+        _omdbTestResult = result != null
+            ? 'Connected — found "${result['Title']}" on a test lookup.'
+            : 'Connected, but the test title was not found (unusual).';
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _omdbTesting = false;
+        _omdbTestOk = false;
+        _omdbTestResult = e.toString();
       });
     }
   }
@@ -174,6 +225,60 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     _testResult!,
                     style: TextStyle(
                       color: _testOk
+                          ? Colors.greenAccent.shade400
+                          : Colors.redAccent.shade100,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 32),
+              const Text(
+                'OMDb (alternative source)',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Used automatically if TMDB is unreachable or finds no '
+                'match. Different hosting than TMDB, so it may work even '
+                'when TMDB does not.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _omdbKeyController,
+                decoration: const InputDecoration(
+                  labelText: 'OMDb API Key',
+                  border: OutlineInputBorder(),
+                  helperText: 'Get a free key at omdbapi.com/apikey.aspx',
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  FilledButton(
+                    onPressed: _save,
+                    child: const Text('Save'),
+                  ),
+                  const SizedBox(width: 12),
+                  OutlinedButton(
+                    onPressed: _omdbTesting ? null : _testOmdbConnection,
+                    child: _omdbTesting
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Test Connection'),
+                  ),
+                ],
+              ),
+              if (_omdbTestResult != null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    _omdbTestResult!,
+                    style: TextStyle(
+                      color: _omdbTestOk
                           ? Colors.greenAccent.shade400
                           : Colors.redAccent.shade100,
                       fontSize: 13,

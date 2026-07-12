@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
 import '../services/library_scanner.dart';
+import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
 
 // ---------------------------------------------------------------------------
@@ -33,18 +34,26 @@ final foldersStreamProvider = StreamProvider<List<LibraryFolder>>((ref) {
 
 class AppSettingsData {
   final String? tmdbApiKey;
+  final String? omdbApiKey;
   final String? proxyHost;
   final int? proxyPort;
-  AppSettingsData({this.tmdbApiKey, this.proxyHost, this.proxyPort});
+  AppSettingsData({
+    this.tmdbApiKey,
+    this.omdbApiKey,
+    this.proxyHost,
+    this.proxyPort,
+  });
 }
 
 final appSettingsProvider = FutureProvider<AppSettingsData>((ref) async {
   final db = ref.watch(databaseProvider);
   final apiKey = await db.getSetting('tmdb_api_key');
+  final omdbKey = await db.getSetting('omdb_api_key');
   final proxyHost = await db.getSetting('proxy_host');
   final proxyPortStr = await db.getSetting('proxy_port');
   return AppSettingsData(
     tmdbApiKey: (apiKey != null && apiKey.isNotEmpty) ? apiKey : null,
+    omdbApiKey: (omdbKey != null && omdbKey.isNotEmpty) ? omdbKey : null,
     proxyHost: (proxyHost != null && proxyHost.isNotEmpty) ? proxyHost : null,
     proxyPort:
         (proxyPortStr != null) ? int.tryParse(proxyPortStr) : null,
@@ -56,6 +65,17 @@ final tmdbServiceProvider = Provider<TmdbService?>((ref) {
   final apiKey = settings?.tmdbApiKey;
   if (apiKey == null || apiKey.isEmpty) return null;
   return TmdbService(
+    apiKey: apiKey,
+    proxyHost: settings?.proxyHost,
+    proxyPort: settings?.proxyPort,
+  );
+});
+
+final omdbServiceProvider = Provider<OmdbService?>((ref) {
+  final settings = ref.watch(appSettingsProvider).value;
+  final apiKey = settings?.omdbApiKey;
+  if (apiKey == null || apiKey.isEmpty) return null;
+  return OmdbService(
     apiKey: apiKey,
     proxyHost: settings?.proxyHost,
     proxyPort: settings?.proxyPort,
@@ -116,6 +136,7 @@ class ScanController extends StateNotifier<ScanState> {
 
   Future<void> scanMovieFolder(String path) async {
     final tmdb = ref.read(tmdbServiceProvider);
+    final omdb = ref.read(omdbServiceProvider);
     state = const ScanState(status: ScanStatus.scanning);
 
     final items = await LibraryScanner.scanMovies(path);
@@ -132,7 +153,7 @@ class ScanController extends StateNotifier<ScanState> {
       state = state.copyWith(currentItem: item.title);
 
       // Always save the basic scanned info first, so the file shows up in
-      // the library even if TMDB is unreachable.
+      // the library even if no metadata source is reachable.
       try {
         await db.upsertMovie(MoviesCompanion.insert(
           title: item.title,
@@ -141,13 +162,13 @@ class ScanController extends StateNotifier<ScanState> {
           year: Value(item.year),
         ));
       } catch (_) {
-        // If even the basic save fails, skip this item entirely.
         state = state.copyWith(processed: state.processed + 1);
         continue;
       }
 
-      // Then try to enrich it with TMDB data, without losing the basic
-      // entry if this part fails.
+      var matchedThisItem = false;
+
+      // Try TMDB first.
       if (tmdb != null) {
         try {
           final results =
@@ -189,20 +210,52 @@ class ScanController extends StateNotifier<ScanState> {
               year: Value(item.year),
               tmdbId: Value(best.id),
               overview: Value(overview),
-              posterPath: Value(posterPath),
-              backdropPath: Value(backdropPath),
+              posterPath: Value(TmdbService.imageUrl(posterPath)),
+              backdropPath:
+                  Value(TmdbService.imageUrl(backdropPath, size: 'w1280')),
               rating: Value(rating),
               runtimeMinutes: Value(runtime),
               genres: Value(genres),
               director: Value(director),
               castNames: Value(castNames),
             ));
+            matchedThisItem = true;
             state = state.copyWith(matched: state.matched + 1);
           }
         } catch (e) {
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
-            lastError: e.toString(),
+            lastError: 'TMDB: $e',
+          );
+        }
+      }
+
+      // Fall back to OMDb if TMDB didn't find/reach anything.
+      if (!matchedThisItem && omdb != null) {
+        try {
+          final data = await omdb.lookupMovie(item.title, year: item.year);
+          if (data != null) {
+            await db.upsertMovie(MoviesCompanion.insert(
+              title: item.title,
+              filePath: item.filePath,
+              folderPath: item.folderPath,
+              year: Value(item.year),
+              overview: Value(data['Plot'] as String?),
+              posterPath: Value(OmdbService.posterUrl(data['Poster'] as String?)),
+              rating: Value(OmdbService.parseRating(data['imdbRating'] as String?)),
+              runtimeMinutes:
+                  Value(OmdbService.parseRuntimeMinutes(data['Runtime'] as String?)),
+              genres: Value(data['Genre'] as String?),
+              director: Value(data['Director'] as String?),
+              castNames: Value(data['Actors'] as String?),
+            ));
+            matchedThisItem = true;
+            state = state.copyWith(matched: state.matched + 1);
+          }
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'OMDb: $e',
           );
         }
       }
@@ -215,6 +268,7 @@ class ScanController extends StateNotifier<ScanState> {
 
   Future<void> scanShowFolder(String path) async {
     final tmdb = ref.read(tmdbServiceProvider);
+    final omdb = ref.read(omdbServiceProvider);
     state = const ScanState(status: ScanStatus.scanning);
 
     final shows = await LibraryScanner.scanShows(path);
@@ -249,6 +303,8 @@ class ScanController extends StateNotifier<ScanState> {
         continue;
       }
 
+      var matchedThisItem = false;
+
       if (tmdb != null) {
         try {
           final results = await tmdb.searchTvShow(show.title);
@@ -268,18 +324,49 @@ class ScanController extends StateNotifier<ScanState> {
               folderPath: show.folderPath,
               tmdbId: Value(best.id),
               overview: Value(overview),
-              posterPath: Value(posterPath),
-              backdropPath: Value(backdropPath),
+              posterPath: Value(TmdbService.imageUrl(posterPath)),
+              backdropPath:
+                  Value(TmdbService.imageUrl(backdropPath, size: 'w1280')),
               rating: Value(rating),
               genres: Value(genres),
               status: Value(showStatus),
             ));
+            matchedThisItem = true;
             state = state.copyWith(matched: state.matched + 1);
           }
         } catch (e) {
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
-            lastError: e.toString(),
+            lastError: 'TMDB: $e',
+          );
+        }
+      }
+
+      if (!matchedThisItem && omdb != null) {
+        try {
+          final data = await omdb.lookupShow(show.title);
+          if (data != null) {
+            final totalSeasons = data['totalSeasons'];
+            final statusText = (data['Status'] as String?) ??
+                (totalSeasons != null ? '$totalSeasons seasons' : null);
+            await db.upsertShow(ShowsCompanion.insert(
+              title: show.title,
+              folderPath: show.folderPath,
+              overview: Value(data['Plot'] as String?),
+              posterPath:
+                  Value(OmdbService.posterUrl(data['Poster'] as String?)),
+              rating: Value(
+                  OmdbService.parseRating(data['imdbRating'] as String?)),
+              genres: Value(data['Genre'] as String?),
+              status: Value(statusText),
+            ));
+            matchedThisItem = true;
+            state = state.copyWith(matched: state.matched + 1);
+          }
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'OMDb: $e',
           );
         }
       }

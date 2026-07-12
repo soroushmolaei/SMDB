@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
-import '../services/tmdb_service.dart';
 import '../widgets/poster_card.dart';
 import 'movie_detail_screen.dart';
 import 'settings_screen.dart';
@@ -214,7 +213,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                         final movie = filtered[index];
                         return PosterCard(
                           title: movie.title,
-                          posterUrl: TmdbService.imageUrl(movie.posterPath),
+                          posterUrl: movie.posterPath,
                           watched: movie.watched,
                           onTap: () => Navigator.of(context).push(
                             MaterialPageRoute(
@@ -262,7 +261,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                         final show = filtered[index];
                         return PosterCard(
                           title: show.title,
-                          posterUrl: TmdbService.imageUrl(show.posterPath),
+                          posterUrl: show.posterPath,
                           watched: false,
                           onTap: () {},
                         );
