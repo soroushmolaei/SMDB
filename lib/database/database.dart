@@ -76,6 +76,22 @@ class Episodes extends Table {
   DateTimeColumn get watchedDate => dateTime().nullable()();
 }
 
+@DataClassName('Person')
+class People extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  TextColumn get photoPath => text().nullable()();
+}
+
+@DataClassName('MovieCredit')
+class MovieCredits extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get movieId => integer().references(Movies, #id)();
+  IntColumn get personId => integer().references(People, #id)();
+  TextColumn get role => text()(); // 'actor' | 'director' | 'writer'
+  TextColumn get character => text().nullable()();
+}
+
 @DataClassName('AppSetting')
 class AppSettings extends Table {
   TextColumn get key => text()();
@@ -85,16 +101,41 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+/// Plain input for [AppDatabase.setMovieCredits] — not a table, just a
+/// transfer object from the scanner/matcher to the database layer.
+class MovieCreditInput {
+  final String name;
+  final String role;
+  final String? character;
+  final String? photoPath;
+  MovieCreditInput({
+    required this.name,
+    required this.role,
+    this.character,
+    this.photoPath,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------
 
-@DriftDatabase(tables: [LibraryFolders, Movies, Shows, Episodes, AppSettings])
+@DriftDatabase(
+  tables: [
+    LibraryFolders,
+    Movies,
+    Shows,
+    Episodes,
+    AppSettings,
+    People,
+    MovieCredits,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -104,6 +145,10 @@ class AppDatabase extends _$AppDatabase {
         onUpgrade: (Migrator m, int from, int to) async {
           if (from < 2) {
             await m.addColumn(movies, movies.writer);
+          }
+          if (from < 3) {
+            await m.createTable(people);
+            await m.createTable(movieCredits);
           }
         },
       );
@@ -136,15 +181,17 @@ class AppDatabase extends _$AppDatabase {
       (select(movies)..where((m) => m.filePath.equals(filePath)))
           .getSingleOrNull();
 
-  /// Inserts a new movie, or updates the existing row for the same file path.
-  Future<void> upsertMovie(MoviesCompanion movie) async {
+  /// Inserts a new movie, or updates the existing row for the same file
+  /// path. Returns the row id either way.
+  Future<int> upsertMovie(MoviesCompanion movie) async {
     final path = movie.filePath.value;
     final existing = await getMovieByFilePath(path);
     if (existing != null) {
       await (update(movies)..where((m) => m.id.equals(existing.id)))
           .write(movie);
+      return existing.id;
     } else {
-      await into(movies).insert(movie);
+      return into(movies).insert(movie);
     }
   }
 
@@ -167,6 +214,58 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> deleteMovie(int id) =>
       (delete(movies)..where((m) => m.id.equals(id))).go();
+
+  // --- People & credits ------------------------------------------------
+
+  Stream<List<Person>> watchAllPeople() => select(people).watch();
+
+  Stream<List<MovieCredit>> watchAllCredits() => select(movieCredits).watch();
+
+  Future<List<MovieCredit>> getCreditsForMovie(int movieId) =>
+      (select(movieCredits)..where((c) => c.movieId.equals(movieId))).get();
+
+  Future<List<MovieCredit>> getCreditsForPerson(int personId) =>
+      (select(movieCredits)..where((c) => c.personId.equals(personId))).get();
+
+  Future<int> findOrCreatePerson(String name, {String? photoPath}) async {
+    final trimmed = name.trim();
+    final existing =
+        await (select(people)..where((p) => p.name.equals(trimmed)))
+            .getSingleOrNull();
+    if (existing != null) {
+      if (photoPath != null && existing.photoPath == null) {
+        await (update(people)..where((p) => p.id.equals(existing.id)))
+            .write(PeopleCompanion(photoPath: Value(photoPath)));
+      }
+      return existing.id;
+    }
+    return into(people).insert(
+      PeopleCompanion.insert(name: trimmed, photoPath: Value(photoPath)),
+    );
+  }
+
+  /// Replaces all credits for [movieId] with [credits] (find-or-create the
+  /// person for each, then link). Safe to call on re-scan.
+  Future<void> setMovieCredits(
+    int movieId,
+    List<MovieCreditInput> credits,
+  ) async {
+    await (delete(movieCredits)..where((c) => c.movieId.equals(movieId)))
+        .go();
+    for (final credit in credits) {
+      if (credit.name.trim().isEmpty) continue;
+      final personId = await findOrCreatePerson(
+        credit.name,
+        photoPath: credit.photoPath,
+      );
+      await into(movieCredits).insert(MovieCreditsCompanion.insert(
+        movieId: movieId,
+        personId: personId,
+        role: credit.role,
+        character: Value(credit.character),
+      ));
+    }
+  }
 
   // --- Shows & Episodes --------------------------------------------------
 

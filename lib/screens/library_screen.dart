@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/providers.dart';
 import '../widgets/poster_card.dart';
 import 'movie_detail_screen.dart';
+import 'people_tab.dart';
 import 'settings_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
@@ -25,7 +26,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -70,6 +71,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
           tabs: const [
             Tab(text: 'Movies'),
             Tab(text: 'Shows'),
+            Tab(text: 'People'),
           ],
         ),
         actions: [
@@ -326,18 +328,21 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, st) => Center(child: Text('Error: $e')),
                 ),
+                const PeopleTab(),
               ],
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _addAndScanFolder(
-          _tabController.index == 0 ? 'movie' : 'show',
-        ),
-        icon: const Icon(Icons.create_new_folder_outlined),
-        label: const Text('Add Folder'),
-      ),
+      floatingActionButton: _tabController.index == 2
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _addAndScanFolder(
+                _tabController.index == 0 ? 'movie' : 'show',
+              ),
+              icon: const Icon(Icons.create_new_folder_outlined),
+              label: const Text('Add Folder'),
+            ),
     );
   }
 

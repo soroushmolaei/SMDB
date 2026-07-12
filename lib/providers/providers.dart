@@ -28,6 +28,14 @@ final foldersStreamProvider = StreamProvider<List<LibraryFolder>>((ref) {
   return ref.watch(databaseProvider).watchAllFolders();
 });
 
+final peopleStreamProvider = StreamProvider<List<Person>>((ref) {
+  return ref.watch(databaseProvider).watchAllPeople();
+});
+
+final allCreditsStreamProvider = StreamProvider<List<MovieCredit>>((ref) {
+  return ref.watch(databaseProvider).watchAllCredits();
+});
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -139,6 +147,7 @@ class _MovieMatch {
   final String? director;
   final String? writer;
   final String? castNames;
+  final List<MovieCreditInput> credits;
 
   _MovieMatch({
     this.tmdbId,
@@ -151,6 +160,7 @@ class _MovieMatch {
     this.director,
     this.writer,
     this.castNames,
+    this.credits = const [],
   });
 }
 
@@ -182,8 +192,9 @@ class ScanController extends StateNotifier<ScanState> {
 
       // Always save the basic scanned info first, so the file shows up in
       // the library even if no metadata source is reachable.
+      int movieId;
       try {
-        await db.upsertMovie(MoviesCompanion.insert(
+        movieId = await db.upsertMovie(MoviesCompanion.insert(
           title: item.title,
           filePath: item.filePath,
           folderPath: item.folderPath,
@@ -222,7 +233,7 @@ class ScanController extends StateNotifier<ScanState> {
       }
 
       if (match != null) {
-        await db.upsertMovie(MoviesCompanion.insert(
+        movieId = await db.upsertMovie(MoviesCompanion.insert(
           title: item.title,
           filePath: item.filePath,
           folderPath: item.folderPath,
@@ -238,6 +249,11 @@ class ScanController extends StateNotifier<ScanState> {
           writer: Value(match.writer),
           castNames: Value(match.castNames),
         ));
+        try {
+          await db.setMovieCredits(movieId, match.credits);
+        } catch (_) {
+          // Credits are a nice-to-have; don't fail the whole item over it.
+        }
         state = state.copyWith(matched: state.matched + 1);
       }
 
@@ -254,6 +270,23 @@ class ScanController extends StateNotifier<ScanState> {
   ) async {
     final data = await omdb.lookupMovie(title, year: year);
     if (data == null) return null;
+
+    final credits = <MovieCreditInput>[];
+    void addNames(String? raw, String role) {
+      final cleaned = OmdbService.cleanText(raw);
+      if (cleaned == null) return;
+      for (final name in cleaned.split(',')) {
+        final trimmed = name.trim();
+        if (trimmed.isNotEmpty) {
+          credits.add(MovieCreditInput(name: trimmed, role: role));
+        }
+      }
+    }
+
+    addNames(data['Director'] as String?, 'director');
+    addNames(data['Writer'] as String?, 'writer');
+    addNames(data['Actors'] as String?, 'actor');
+
     return _MovieMatch(
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
@@ -264,6 +297,7 @@ class ScanController extends StateNotifier<ScanState> {
       director: OmdbService.cleanText(data['Director'] as String?),
       writer: OmdbService.cleanText(data['Writer'] as String?),
       castNames: OmdbService.cleanText(data['Actors'] as String?),
+      credits: credits,
     );
   }
 
@@ -283,15 +317,19 @@ class ScanController extends StateNotifier<ScanState> {
     String? director;
     String? writer;
     String? castNames;
-    final credits = details['credits'] as Map<String, dynamic>?;
-    if (credits != null) {
-      final crew = (credits['crew'] as List<dynamic>?) ?? [];
+    final creditsList = <MovieCreditInput>[];
+    final creditsMap = details['credits'] as Map<String, dynamic>?;
+    if (creditsMap != null) {
+      final crew = (creditsMap['crew'] as List<dynamic>?) ?? [];
       final directorEntry = crew.firstWhere(
         (c) => c['job'] == 'Director',
         orElse: () => null,
       );
       director =
           directorEntry != null ? directorEntry['name'] as String? : null;
+      if (director != null) {
+        creditsList.add(MovieCreditInput(name: director, role: 'director'));
+      }
 
       final writerEntry = crew.firstWhere(
         (c) =>
@@ -301,9 +339,23 @@ class ScanController extends StateNotifier<ScanState> {
         orElse: () => null,
       );
       writer = writerEntry != null ? writerEntry['name'] as String? : null;
+      if (writer != null) {
+        creditsList.add(MovieCreditInput(name: writer, role: 'writer'));
+      }
 
-      final cast = (credits['cast'] as List<dynamic>?) ?? [];
+      final cast = (creditsMap['cast'] as List<dynamic>?) ?? [];
       castNames = cast.take(6).map((c) => c['name']).join(', ');
+      for (final c in cast.take(10)) {
+        final name = c['name'] as String?;
+        if (name == null || name.isEmpty) continue;
+        creditsList.add(MovieCreditInput(
+          name: name,
+          role: 'actor',
+          character: c['character'] as String?,
+          photoPath:
+              TmdbService.imageUrl(c['profile_path'] as String?, size: 'w185'),
+        ));
+      }
     }
 
     return _MovieMatch(
@@ -320,6 +372,7 @@ class ScanController extends StateNotifier<ScanState> {
       director: director,
       writer: writer,
       castNames: castNames,
+      credits: creditsList,
     );
   }
 

@@ -5,6 +5,19 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
+class OmdbSearchResult {
+  final String imdbId;
+  final String title;
+  final String? year;
+  final String? posterUrl;
+  OmdbSearchResult({
+    required this.imdbId,
+    required this.title,
+    this.year,
+    this.posterUrl,
+  });
+}
+
 class OmdbException implements Exception {
   final String message;
   OmdbException(this.message);
@@ -106,6 +119,32 @@ class OmdbService {
     throw OmdbException(
       'Could not reach OMDb after two attempts (${errors.join(" | ")}).',
     );
+  }
+
+  /// Lightweight search for a picker UI — does not fetch full details for
+  /// every result.
+  Future<List<OmdbSearchResult>> searchTitles(
+    String query, {
+    String type = 'movie',
+  }) async {
+    final search = await _get({'s': query, 'type': type});
+    if (search['Response'] != 'True') return [];
+    final results = (search['Search'] as List<dynamic>?) ?? [];
+    return results
+        .map((r) => OmdbSearchResult(
+              imdbId: r['imdbID'] as String,
+              title: r['Title'] as String? ?? '',
+              year: r['Year'] as String?,
+              posterUrl: posterUrl(r['Poster'] as String?),
+            ))
+        .toList();
+  }
+
+  /// Fetches full details for a specific, known IMDb ID — used once the
+  /// user has picked the correct title from a search result list.
+  Future<Map<String, dynamic>?> getByImdbId(String imdbId) async {
+    final details = await _get({'i': imdbId, 'plot': 'full'});
+    return details['Response'] == 'True' ? details : null;
   }
 
   /// Looks up a movie by title (and optional year), trying an exact title
