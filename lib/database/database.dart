@@ -35,6 +35,7 @@ class Movies extends Table {
   IntColumn get runtimeMinutes => integer().nullable()();
   TextColumn get genres => text().nullable()(); // comma separated
   TextColumn get director => text().nullable()();
+  TextColumn get writer => text().nullable()();
   TextColumn get castNames => text().nullable()(); // comma separated
   TextColumn get filePath => text()();
   TextColumn get folderPath => text()();
@@ -93,7 +94,19 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onCreate: (Migrator m) async {
+          await m.createAll();
+        },
+        onUpgrade: (Migrator m, int from, int to) async {
+          if (from < 2) {
+            await m.addColumn(movies, movies.writer);
+          }
+        },
+      );
 
   // --- Folders -------------------------------------------------------------
 
@@ -146,6 +159,11 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setPersonalRating(int id, double? rating) =>
       (update(movies)..where((m) => m.id.equals(id)))
           .write(MoviesCompanion(personalRating: Value(rating)));
+
+  /// Applies an arbitrary set of field edits to an existing movie (used by
+  /// the manual edit screen). Only fields set on [data] are changed.
+  Future<void> updateMovieDetails(int id, MoviesCompanion data) =>
+      (update(movies)..where((m) => m.id.equals(id))).write(data);
 
   Future<void> deleteMovie(int id) =>
       (delete(movies)..where((m) => m.id.equals(id))).go();

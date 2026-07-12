@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import 'edit_movie_screen.dart';
 
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
@@ -29,6 +30,52 @@ class MovieDetailScreen extends ConsumerWidget {
               SliverAppBar(
                 expandedHeight: 220,
                 pinned: true,
+                actions: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined),
+                    tooltip: 'Edit',
+                    onPressed: () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => EditMovieScreen(movieId: movie.id),
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: 'Delete',
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (dialogContext) => AlertDialog(
+                          title: const Text('Delete movie?'),
+                          content: Text(
+                            'This removes "${movie.title}" from your '
+                            'library. The video file on disk is not '
+                            'touched.',
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(false),
+                              child: const Text('Cancel'),
+                            ),
+                            FilledButton(
+                              onPressed: () =>
+                                  Navigator.of(dialogContext).pop(true),
+                              child: const Text('Delete'),
+                            ),
+                          ],
+                        ),
+                      );
+                      if (confirmed == true) {
+                        await ref
+                            .read(databaseProvider)
+                            .deleteMovie(movie.id);
+                        if (context.mounted) Navigator.of(context).pop();
+                      }
+                    },
+                  ),
+                ],
                 flexibleSpace: FlexibleSpaceBar(
                   background: backdropUrl != null
                       ? CachedNetworkImage(
@@ -137,6 +184,13 @@ class MovieDetailScreen extends ConsumerWidget {
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text('Director: ${movie.director}'),
+                  ),
+                ),
+              if (movie.writer != null && movie.writer!.isNotEmpty)
+                SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: Text('Writer: ${movie.writer}'),
                   ),
                 ),
               if (movie.castNames != null && movie.castNames!.isNotEmpty)

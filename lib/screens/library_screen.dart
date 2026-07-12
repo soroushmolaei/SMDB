@@ -18,6 +18,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   String _query = '';
+  String? _selectedGenre;
+  int? _selectedYear;
+  double? _minRating;
 
   @override
   void initState() {
@@ -55,7 +58,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
     final moviesAsync = ref.watch(moviesStreamProvider);
     final showsAsync = ref.watch(showsStreamProvider);
     final scanState = ref.watch(scanControllerProvider);
+    final omdbConfigured = ref.watch(omdbServiceProvider) != null;
     final tmdbConfigured = ref.watch(tmdbServiceProvider) != null;
+    final noSourceConfigured = !omdbConfigured && !tmdbConfigured;
 
     return Scaffold(
       appBar: AppBar(
@@ -78,7 +83,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
       ),
       body: Column(
         children: [
-          if (!tmdbConfigured)
+          if (noSourceConfigured)
             Container(
               width: double.infinity,
               color: Colors.amber.shade800,
@@ -87,7 +92,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                 children: [
                   const Expanded(
                     child: Text(
-                      'Add a TMDB API key in Settings to fetch posters and details.',
+                      'Add an OMDb or TMDB API key in Settings to fetch posters and details.',
                       style: TextStyle(color: Colors.black),
                     ),
                   ),
@@ -138,10 +143,10 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   Text(
                     scanState.networkErrors > 0
                         ? 'Scan finished: ${scanState.matched}/${scanState.total} '
-                            'matched with TMDB, ${scanState.networkErrors} failed '
-                            'to reach TMDB.'
+                            'matched, ${scanState.networkErrors} source '
+                            'lookups failed (see below).'
                         : 'Scan finished: ${scanState.matched}/${scanState.total} '
-                            'matched with TMDB.',
+                            'matched.',
                     style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
@@ -159,9 +164,9 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                     ),
                     const SizedBox(height: 4),
                     const Text(
-                      'If TMDB is blocked on your network, set a proxy in '
-                      'Settings. Files were still added to your library '
-                      'without posters.',
+                      'If a source is blocked on your network, check the '
+                      'proxy in Settings. Files were still added to your '
+                      'library even without posters.',
                       style: TextStyle(color: Colors.white70, fontSize: 12),
                     ),
                   ],
@@ -173,7 +178,7 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
             child: TextField(
               decoration: const InputDecoration(
                 prefixIcon: Icon(Icons.search),
-                hintText: 'Search your library...',
+                hintText: 'Search title, cast, director, writer...',
                 isDense: true,
                 border: OutlineInputBorder(),
               ),
@@ -186,46 +191,94 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
               children: [
                 moviesAsync.when(
                   data: (movies) {
-                    final filtered = _query.isEmpty
-                        ? movies
-                        : movies
-                            .where((m) =>
-                                m.title.toLowerCase().contains(_query))
-                            .toList();
-                    if (filtered.isEmpty) {
-                      return _emptyState(
-                        'No movies yet',
-                        'Add a folder to scan your movie collection.',
-                        () => _addAndScanFolder('movie'),
-                      );
+                    final allGenres = <String>{};
+                    final allYears = <int>{};
+                    for (final m in movies) {
+                      if (m.genres != null) {
+                        for (final g in m.genres!.split(',')) {
+                          final t = g.trim();
+                          if (t.isNotEmpty) allGenres.add(t);
+                        }
+                      }
+                      if (m.year != null) allYears.add(m.year!);
                     }
-                    return GridView.builder(
-                      padding: const EdgeInsets.all(12),
-                      gridDelegate:
-                          const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 150,
-                        childAspectRatio: 0.55,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: filtered.length,
-                      itemBuilder: (context, index) {
-                        final movie = filtered[index];
-                        return PosterCard(
-                          title: movie.title,
-                          posterUrl: movie.posterPath,
-                          watched: movie.watched,
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  MovieDetailScreen(movieId: movie.id),
-                            ),
-                          ),
-                          onToggleWatched: () => ref
-                              .read(databaseProvider)
-                              .setMovieWatched(movie.id, !movie.watched),
-                        );
-                      },
+                    final sortedGenres = allGenres.toList()..sort();
+                    final sortedYears = allYears.toList()
+                      ..sort((a, b) => b.compareTo(a));
+
+                    final filtered = movies.where((m) {
+                      if (_query.isNotEmpty) {
+                        final haystack = [
+                          m.title,
+                          m.castNames ?? '',
+                          m.director ?? '',
+                          m.writer ?? '',
+                          m.genres ?? '',
+                        ].join(' ').toLowerCase();
+                        if (!haystack.contains(_query)) return false;
+                      }
+                      if (_selectedGenre != null) {
+                        final genres = (m.genres ?? '')
+                            .split(',')
+                            .map((g) => g.trim());
+                        if (!genres.contains(_selectedGenre)) return false;
+                      }
+                      if (_selectedYear != null && m.year != _selectedYear) {
+                        return false;
+                      }
+                      if (_minRating != null &&
+                          (m.rating == null || m.rating! < _minRating!)) {
+                        return false;
+                      }
+                      return true;
+                    }).toList();
+
+                    return Column(
+                      children: [
+                        if (movies.isNotEmpty)
+                          _buildFilterRow(sortedGenres, sortedYears),
+                        Expanded(
+                          child: filtered.isEmpty
+                              ? _emptyState(
+                                  movies.isEmpty
+                                      ? 'No movies yet'
+                                      : 'No matches',
+                                  movies.isEmpty
+                                      ? 'Add a folder to scan your movie collection.'
+                                      : 'Try a different search or clear filters.',
+                                  () => _addAndScanFolder('movie'),
+                                )
+                              : GridView.builder(
+                                  padding: const EdgeInsets.all(12),
+                                  gridDelegate:
+                                      const SliverGridDelegateWithMaxCrossAxisExtent(
+                                    maxCrossAxisExtent: 150,
+                                    childAspectRatio: 0.55,
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                  ),
+                                  itemCount: filtered.length,
+                                  itemBuilder: (context, index) {
+                                    final movie = filtered[index];
+                                    return PosterCard(
+                                      title: movie.title,
+                                      posterUrl: movie.posterPath,
+                                      watched: movie.watched,
+                                      onTap: () => Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) => MovieDetailScreen(
+                                              movieId: movie.id),
+                                        ),
+                                      ),
+                                      onToggleWatched: () => ref
+                                          .read(databaseProvider)
+                                          .setMovieWatched(
+                                              movie.id, !movie.watched),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ],
                     );
                   },
                   loading: () =>
@@ -236,10 +289,11 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                   data: (shows) {
                     final filtered = _query.isEmpty
                         ? shows
-                        : shows
-                            .where((s) =>
-                                s.title.toLowerCase().contains(_query))
-                            .toList();
+                        : shows.where((s) {
+                            final haystack =
+                                '${s.title} ${s.genres ?? ''}'.toLowerCase();
+                            return haystack.contains(_query);
+                          }).toList();
                     if (filtered.isEmpty) {
                       return _emptyState(
                         'No shows yet',
@@ -283,6 +337,73 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
         ),
         icon: const Icon(Icons.create_new_folder_outlined),
         label: const Text('Add Folder'),
+      ),
+    );
+  }
+
+  Widget _buildFilterRow(List<String> genres, List<int> years) {
+    final hasActiveFilters = _selectedGenre != null ||
+        _selectedYear != null ||
+        _minRating != null;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          children: [
+            DropdownButton<String?>(
+              value: _selectedGenre,
+              hint: const Text('Genre'),
+              underline: const SizedBox.shrink(),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All genres')),
+                ...genres.map(
+                  (g) => DropdownMenuItem(value: g, child: Text(g)),
+                ),
+              ],
+              onChanged: (v) => setState(() => _selectedGenre = v),
+            ),
+            const SizedBox(width: 12),
+            DropdownButton<int?>(
+              value: _selectedYear,
+              hint: const Text('Year'),
+              underline: const SizedBox.shrink(),
+              items: [
+                const DropdownMenuItem(value: null, child: Text('All years')),
+                ...years.map(
+                  (y) => DropdownMenuItem(value: y, child: Text('$y')),
+                ),
+              ],
+              onChanged: (v) => setState(() => _selectedYear = v),
+            ),
+            const SizedBox(width: 12),
+            DropdownButton<double?>(
+              value: _minRating,
+              hint: const Text('Rating'),
+              underline: const SizedBox.shrink(),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('Any rating')),
+                DropdownMenuItem(value: 9.0, child: Text('9+')),
+                DropdownMenuItem(value: 8.0, child: Text('8+')),
+                DropdownMenuItem(value: 7.0, child: Text('7+')),
+                DropdownMenuItem(value: 6.0, child: Text('6+')),
+                DropdownMenuItem(value: 5.0, child: Text('5+')),
+              ],
+              onChanged: (v) => setState(() => _minRating = v),
+            ),
+            if (hasActiveFilters) ...[
+              const SizedBox(width: 8),
+              TextButton(
+                onPressed: () => setState(() {
+                  _selectedGenre = null;
+                  _selectedYear = null;
+                  _minRating = null;
+                }),
+                child: const Text('Clear'),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

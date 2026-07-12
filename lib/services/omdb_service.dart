@@ -158,6 +158,11 @@ class OmdbService {
     return raw;
   }
 
+  static String? cleanText(String? raw) {
+    if (raw == null || raw.isEmpty || raw == 'N/A') return null;
+    return raw;
+  }
+
   static double? parseRating(String? imdbRating) {
     if (imdbRating == null || imdbRating == 'N/A') return null;
     return double.tryParse(imdbRating);
