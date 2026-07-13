@@ -144,6 +144,7 @@ class _MovieMatch {
   final double? rating;
   final int? runtimeMinutes;
   final String? genres;
+  final String? contentRating;
   final String? director;
   final String? writer;
   final String? castNames;
@@ -157,6 +158,7 @@ class _MovieMatch {
     this.rating,
     this.runtimeMinutes,
     this.genres,
+    this.contentRating,
     this.director,
     this.writer,
     this.castNames,
@@ -164,9 +166,76 @@ class _MovieMatch {
   });
 }
 
+class _TmdbCreditsExtract {
+  final String? director;
+  final String? writer;
+  final String? castNames;
+  final List<MovieCreditInput> credits;
+  _TmdbCreditsExtract({
+    this.director,
+    this.writer,
+    this.castNames,
+    required this.credits,
+  });
+}
+
+_TmdbCreditsExtract _extractTmdbCredits(Map<String, dynamic>? creditsMap) {
+  String? director;
+  String? writer;
+  String? castNames;
+  final creditsList = <MovieCreditInput>[];
+  if (creditsMap != null) {
+    final crew = (creditsMap['crew'] as List<dynamic>?) ?? [];
+    final directorEntry = crew.firstWhere(
+      (c) => c['job'] == 'Director',
+      orElse: () => null,
+    );
+    director = directorEntry != null ? directorEntry['name'] as String? : null;
+    if (director != null) {
+      creditsList.add(MovieCreditInput(name: director, role: 'director'));
+    }
+
+    final writerEntry = crew.firstWhere(
+      (c) =>
+          c['job'] == 'Writer' ||
+          c['job'] == 'Screenplay' ||
+          c['job'] == 'Author',
+      orElse: () => null,
+    );
+    writer = writerEntry != null ? writerEntry['name'] as String? : null;
+    if (writer != null) {
+      creditsList.add(MovieCreditInput(name: writer, role: 'writer'));
+    }
+
+    // Grab most of the credited cast (not just the top handful) so the
+    // People tab reflects close to the full cast list.
+    final cast = (creditsMap['cast'] as List<dynamic>?) ?? [];
+    castNames = cast.take(6).map((c) => c['name']).join(', ');
+    for (final c in cast.take(30)) {
+      final name = c['name'] as String?;
+      if (name == null || name.isEmpty) continue;
+      creditsList.add(MovieCreditInput(
+        name: name,
+        role: 'actor',
+        character: c['character'] as String?,
+        photoPath:
+            TmdbService.imageUrl(c['profile_path'] as String?, size: 'w185'),
+      ));
+    }
+  }
+  return _TmdbCreditsExtract(
+    director: director,
+    writer: writer,
+    castNames: castNames,
+    credits: creditsList,
+  );
+}
+
 class ScanController extends StateNotifier<ScanState> {
   final AppDatabase db;
   final Ref ref;
+  int _tmdbConsecutiveFailures = 0;
+  static const _tmdbCircuitBreakerThreshold = 3;
 
   ScanController(this.db, this.ref) : super(const ScanState());
 
@@ -175,6 +244,7 @@ class ScanController extends StateNotifier<ScanState> {
   Future<void> scanMovieFolder(String path) async {
     final tmdb = ref.read(tmdbServiceProvider);
     final omdb = ref.read(omdbServiceProvider);
+    _tmdbConsecutiveFailures = 0;
     state = const ScanState(status: ScanStatus.scanning);
 
     final items = await LibraryScanner.scanMovies(path);
@@ -212,7 +282,16 @@ class ScanController extends StateNotifier<ScanState> {
       // waiting out a doomed TMDB attempt on every single item.
       if (omdb != null) {
         try {
-          match = await _matchMovieOmdb(omdb, item.title, item.year);
+          final tmdbForEnrichment =
+              _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
+                  ? tmdb
+                  : null;
+          match = await _matchMovieOmdb(
+            omdb,
+            tmdbForEnrichment,
+            item.title,
+            item.year,
+          );
         } catch (e) {
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
@@ -221,10 +300,14 @@ class ScanController extends StateNotifier<ScanState> {
         }
       }
 
-      if (match == null && tmdb != null) {
+      if (match == null &&
+          tmdb != null &&
+          _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold) {
         try {
           match = await _matchMovieTmdb(tmdb, item.title, item.year);
+          _tmdbConsecutiveFailures = 0;
         } catch (e) {
+          _tmdbConsecutiveFailures++;
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
             lastError: 'TMDB: $e',
@@ -245,6 +328,7 @@ class ScanController extends StateNotifier<ScanState> {
           rating: Value(match.rating),
           runtimeMinutes: Value(match.runtimeMinutes),
           genres: Value(match.genres),
+          contentRating: Value(match.contentRating),
           director: Value(match.director),
           writer: Value(match.writer),
           castNames: Value(match.castNames),
@@ -265,6 +349,7 @@ class ScanController extends StateNotifier<ScanState> {
 
   Future<_MovieMatch?> _matchMovieOmdb(
     OmdbService omdb,
+    TmdbService? tmdbForEnrichment,
     String title,
     int? year,
   ) async {
@@ -287,13 +372,46 @@ class ScanController extends StateNotifier<ScanState> {
     addNames(data['Writer'] as String?, 'writer');
     addNames(data['Actors'] as String?, 'actor');
 
+    int? tmdbId;
+    var contentRating = OmdbService.cleanText(data['Rated'] as String?);
+
+    // Supplementary: OMDb's basic response only lists a handful of actors
+    // with no photos. If TMDB is reachable, use it just for a fuller,
+    // photo-backed cast/crew list — the movie's own metadata still comes
+    // from OMDb above.
+    if (tmdbForEnrichment != null) {
+      try {
+        final tmdbResults =
+            await tmdbForEnrichment.searchMovie(title, year: year);
+        if (tmdbResults.isNotEmpty) {
+          final tmdbDetails =
+              await tmdbForEnrichment.getMovieDetails(tmdbResults.first.id);
+          final extracted = _extractTmdbCredits(
+            tmdbDetails['credits'] as Map<String, dynamic>?,
+          );
+          if (extracted.credits.isNotEmpty) {
+            credits
+              ..clear()
+              ..addAll(extracted.credits);
+          }
+          contentRating ??= TmdbService.extractCertification(tmdbDetails);
+          tmdbId = tmdbResults.first.id;
+        }
+      } catch (_) {
+        // Keep the OMDb-derived names as a fallback; this enrichment step
+        // is optional.
+      }
+    }
+
     return _MovieMatch(
+      tmdbId: tmdbId,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
       rating: OmdbService.parseRating(data['imdbRating'] as String?),
       runtimeMinutes:
           OmdbService.parseRuntimeMinutes(data['Runtime'] as String?),
       genres: OmdbService.cleanText(data['Genre'] as String?),
+      contentRating: contentRating,
       director: OmdbService.cleanText(data['Director'] as String?),
       writer: OmdbService.cleanText(data['Writer'] as String?),
       castNames: OmdbService.cleanText(data['Actors'] as String?),
@@ -313,50 +431,8 @@ class ScanController extends StateNotifier<ScanState> {
 
     final genreList = (details['genres'] as List<dynamic>?) ?? [];
     final genres = genreList.map((g) => g['name']).join(', ');
-
-    String? director;
-    String? writer;
-    String? castNames;
-    final creditsList = <MovieCreditInput>[];
-    final creditsMap = details['credits'] as Map<String, dynamic>?;
-    if (creditsMap != null) {
-      final crew = (creditsMap['crew'] as List<dynamic>?) ?? [];
-      final directorEntry = crew.firstWhere(
-        (c) => c['job'] == 'Director',
-        orElse: () => null,
-      );
-      director =
-          directorEntry != null ? directorEntry['name'] as String? : null;
-      if (director != null) {
-        creditsList.add(MovieCreditInput(name: director, role: 'director'));
-      }
-
-      final writerEntry = crew.firstWhere(
-        (c) =>
-            c['job'] == 'Writer' ||
-            c['job'] == 'Screenplay' ||
-            c['job'] == 'Author',
-        orElse: () => null,
-      );
-      writer = writerEntry != null ? writerEntry['name'] as String? : null;
-      if (writer != null) {
-        creditsList.add(MovieCreditInput(name: writer, role: 'writer'));
-      }
-
-      final cast = (creditsMap['cast'] as List<dynamic>?) ?? [];
-      castNames = cast.take(6).map((c) => c['name']).join(', ');
-      for (final c in cast.take(10)) {
-        final name = c['name'] as String?;
-        if (name == null || name.isEmpty) continue;
-        creditsList.add(MovieCreditInput(
-          name: name,
-          role: 'actor',
-          character: c['character'] as String?,
-          photoPath:
-              TmdbService.imageUrl(c['profile_path'] as String?, size: 'w185'),
-        ));
-      }
-    }
+    final extracted =
+        _extractTmdbCredits(details['credits'] as Map<String, dynamic>?);
 
     return _MovieMatch(
       tmdbId: best.id,
@@ -369,10 +445,11 @@ class ScanController extends StateNotifier<ScanState> {
       rating: (details['vote_average'] as num?)?.toDouble(),
       runtimeMinutes: details['runtime'] as int?,
       genres: genres,
-      director: director,
-      writer: writer,
-      castNames: castNames,
-      credits: creditsList,
+      contentRating: TmdbService.extractCertification(details),
+      director: extracted.director,
+      writer: extracted.writer,
+      castNames: extracted.castNames,
+      credits: extracted.credits,
     );
   }
 

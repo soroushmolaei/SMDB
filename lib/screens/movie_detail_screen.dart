@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
 import 'edit_movie_screen.dart';
+import 'genre_movies_screen.dart';
+import 'person_detail_screen.dart';
 
 class MovieDetailScreen extends ConsumerWidget {
   final int movieId;
@@ -118,13 +120,20 @@ class MovieDetailScreen extends ConsumerWidget {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            if (movie.year != null)
+                            if (movie.year != null ||
+                                movie.contentRating != null ||
+                                movie.runtimeMinutes != null)
                               Padding(
                                 padding: const EdgeInsets.only(top: 4),
                                 child: Text(
-                                  movie.runtimeMinutes != null
-                                      ? '${movie.year} • ${movie.runtimeMinutes} min'
-                                      : '${movie.year}',
+                                  [
+                                    if (movie.year != null) '${movie.year}',
+                                    if (movie.contentRating != null &&
+                                        movie.contentRating!.isNotEmpty)
+                                      movie.contentRating!,
+                                    if (movie.runtimeMinutes != null)
+                                      '${movie.runtimeMinutes} min',
+                                  ].join(' • '),
                                   style:
                                       const TextStyle(color: Colors.white54),
                                 ),
@@ -166,9 +175,25 @@ class MovieDetailScreen extends ConsumerWidget {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      movie.genres!,
-                      style: const TextStyle(color: Colors.white54),
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: movie.genres!
+                          .split(',')
+                          .map((g) => g.trim())
+                          .where((g) => g.isNotEmpty)
+                          .map(
+                            (g) => ActionChip(
+                              label: Text(g),
+                              onPressed: () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) =>
+                                      GenreMoviesScreen(genre: g),
+                                ),
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
                   ),
                 ),
@@ -179,27 +204,94 @@ class MovieDetailScreen extends ConsumerWidget {
                     child: Text(movie.overview!),
                   ),
                 ),
-              if (movie.director != null && movie.director!.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('Director: ${movie.director}'),
-                  ),
+              SliverToBoxAdapter(
+                child: Builder(
+                  builder: (context) {
+                    final allCredits =
+                        ref.watch(allCreditsStreamProvider).value ?? [];
+                    final people =
+                        ref.watch(peopleStreamProvider).value ?? [];
+                    final peopleById = {for (final p in people) p.id: p};
+                    final movieCredits = allCredits
+                        .where((c) => c.movieId == movie.id)
+                        .toList();
+
+                    if (movieCredits.isEmpty) {
+                      return const SizedBox.shrink();
+                    }
+
+                    Widget roleSection(String title, String role) {
+                      final entries = movieCredits
+                          .where((c) => c.role == role)
+                          .toList();
+                      if (entries.isEmpty) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              title,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: Colors.white38,
+                              ),
+                            ),
+                            const SizedBox(height: 6),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: entries.map((c) {
+                                final person = peopleById[c.personId];
+                                final label = person?.name ?? 'Unknown';
+                                return ActionChip(
+                                  avatar: CircleAvatar(
+                                    backgroundColor: Colors.white10,
+                                    backgroundImage:
+                                        person?.photoPath != null
+                                            ? CachedNetworkImageProvider(
+                                                person!.photoPath!)
+                                            : null,
+                                    child: person?.photoPath == null
+                                        ? const Icon(Icons.person, size: 14)
+                                        : null,
+                                  ),
+                                  label: Text(
+                                    c.character != null &&
+                                            c.character!.isNotEmpty
+                                        ? '$label (${c.character})'
+                                        : label,
+                                  ),
+                                  onPressed: person == null
+                                      ? null
+                                      : () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PersonDetailScreen(
+                                                personId: person.id,
+                                              ),
+                                            ),
+                                          ),
+                                );
+                              }).toList(),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        roleSection('DIRECTOR', 'director'),
+                        roleSection('WRITER', 'writer'),
+                        roleSection('CAST', 'actor'),
+                        const SizedBox(height: 8),
+                      ],
+                    );
+                  },
                 ),
-              if (movie.writer != null && movie.writer!.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
-                    child: Text('Writer: ${movie.writer}'),
-                  ),
-                ),
-              if (movie.castNames != null && movie.castNames!.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text('Cast: ${movie.castNames}'),
-                  ),
-                ),
+              ),
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           );

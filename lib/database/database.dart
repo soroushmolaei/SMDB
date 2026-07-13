@@ -34,6 +34,7 @@ class Movies extends Table {
   RealColumn get rating => real().nullable()();
   IntColumn get runtimeMinutes => integer().nullable()();
   TextColumn get genres => text().nullable()(); // comma separated
+  TextColumn get contentRating => text().nullable()(); // e.g. PG-13, R
   TextColumn get director => text().nullable()();
   TextColumn get writer => text().nullable()();
   TextColumn get castNames => text().nullable()(); // comma separated
@@ -135,7 +136,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -149,6 +150,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 3) {
             await m.createTable(people);
             await m.createTable(movieCredits);
+          }
+          if (from < 4) {
+            await m.addColumn(movies, movies.contentRating);
           }
         },
       );

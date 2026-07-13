@@ -35,6 +35,7 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
   final _year = TextEditingController();
   final _overview = TextEditingController();
   final _genres = TextEditingController();
+  final _contentRating = TextEditingController();
   final _director = TextEditingController();
   final _writer = TextEditingController();
   final _cast = TextEditingController();
@@ -55,6 +56,7 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
     _year.dispose();
     _overview.dispose();
     _genres.dispose();
+    _contentRating.dispose();
     _director.dispose();
     _writer.dispose();
     _cast.dispose();
@@ -70,6 +72,7 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
     _year.text = movie.year?.toString() ?? '';
     _overview.text = movie.overview ?? '';
     _genres.text = movie.genres ?? '';
+    _contentRating.text = movie.contentRating ?? '';
     _director.text = movie.director ?? '';
     _writer.text = movie.writer ?? '';
     _cast.text = movie.castNames ?? '';
@@ -143,6 +146,8 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
           if (yearMatch != null) _year.text = yearMatch.group(0)!;
           _overview.text = OmdbService.cleanText(data['Plot'] as String?) ?? '';
           _genres.text = OmdbService.cleanText(data['Genre'] as String?) ?? '';
+          _contentRating.text =
+              OmdbService.cleanText(data['Rated'] as String?) ?? '';
           _director.text =
               OmdbService.cleanText(data['Director'] as String?) ?? '';
           _writer.text = OmdbService.cleanText(data['Writer'] as String?) ?? '';
@@ -163,6 +168,7 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
         _overview.text = details['overview'] as String? ?? '';
         final genreList = (details['genres'] as List<dynamic>?) ?? [];
         _genres.text = genreList.map((g) => g['name']).join(', ');
+        _contentRating.text = TmdbService.extractCertification(details) ?? '';
         final rating = (details['vote_average'] as num?)?.toDouble();
         _rating.text = rating?.toString() ?? '';
 
@@ -231,6 +237,7 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
         year: Value(int.tryParse(_year.text.trim())),
         overview: Value(_nullIfEmpty(_overview.text)),
         genres: Value(_nullIfEmpty(_genres.text)),
+        contentRating: Value(_nullIfEmpty(_contentRating.text)),
         director: Value(_nullIfEmpty(_director.text)),
         writer: Value(_nullIfEmpty(_writer.text)),
         castNames: Value(_nullIfEmpty(_cast.text)),
@@ -422,6 +429,14 @@ class _EditMovieScreenState extends ConsumerState<EditMovieScreen> {
                 controller: _genres,
                 decoration: const InputDecoration(
                   labelText: 'Genres (comma separated)',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _contentRating,
+                decoration: const InputDecoration(
+                  labelText: 'Content rating (e.g. PG-13, R, TV-MA)',
                   border: OutlineInputBorder(),
                 ),
               ),

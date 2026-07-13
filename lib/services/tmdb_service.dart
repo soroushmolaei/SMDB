@@ -221,7 +221,34 @@ class TmdbService {
   }
 
   Future<Map<String, dynamic>> getMovieDetails(int tmdbId) {
-    return _get('/movie/$tmdbId', {'append_to_response': 'credits'});
+    return _get(
+      '/movie/$tmdbId',
+      {'append_to_response': 'credits,release_dates'},
+    );
+  }
+
+  /// Extracts a single certification string (preferring US) from the
+  /// `release_dates` block appended to [getMovieDetails].
+  static String? extractCertification(Map<String, dynamic> details) {
+    final releaseDates =
+        details['release_dates'] as Map<String, dynamic>?;
+    final results = releaseDates?['results'] as List<dynamic>?;
+    if (results == null) return null;
+
+    Map<String, dynamic>? preferred;
+    for (final entry in results) {
+      if (entry['iso_3166_1'] == 'US') {
+        preferred = entry as Map<String, dynamic>;
+        break;
+      }
+    }
+    preferred ??= results.isNotEmpty ? results.first as Map<String, dynamic> : null;
+    if (preferred == null) return null;
+
+    final releases = preferred['release_dates'] as List<dynamic>?;
+    if (releases == null || releases.isEmpty) return null;
+    final cert = releases.first['certification'] as String?;
+    return (cert != null && cert.isNotEmpty) ? cert : null;
   }
 
   Future<List<TmdbShowResult>> searchTvShow(String query) async {
