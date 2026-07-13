@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/fullscreen_image_viewer.dart';
 import 'edit_movie_screen.dart';
 import 'genre_movies_screen.dart';
 import 'person_detail_screen.dart';
@@ -79,14 +80,20 @@ class MovieDetailScreen extends ConsumerWidget {
                   ),
                 ],
                 flexibleSpace: FlexibleSpaceBar(
-                  background: backdropUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: backdropUrl,
-                          fit: BoxFit.cover,
-                          errorWidget: (c, u, e) =>
-                              Container(color: Colors.black26),
-                        )
-                      : Container(color: Colors.black26),
+                  background: GestureDetector(
+                    onTap: () => FullscreenImageViewer.show(
+                      context,
+                      backdropUrl ?? posterUrl,
+                    ),
+                    child: backdropUrl != null
+                        ? CachedNetworkImage(
+                            imageUrl: backdropUrl,
+                            fit: BoxFit.cover,
+                            errorWidget: (c, u, e) =>
+                                Container(color: Colors.black26),
+                          )
+                        : Container(color: Colors.black26),
+                  ),
                 ),
               ),
               SliverToBoxAdapter(
@@ -95,17 +102,21 @@ class MovieDetailScreen extends ConsumerWidget {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: SizedBox(
-                          width: 110,
-                          height: 165,
-                          child: posterUrl != null
-                              ? CachedNetworkImage(
-                                  imageUrl: posterUrl,
-                                  fit: BoxFit.cover,
-                                )
-                              : Container(color: Colors.white10),
+                      GestureDetector(
+                        onTap: () =>
+                            FullscreenImageViewer.show(context, posterUrl),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: SizedBox(
+                            width: 110,
+                            height: 165,
+                            child: posterUrl != null
+                                ? CachedNetworkImage(
+                                    imageUrl: posterUrl,
+                                    fit: BoxFit.cover,
+                                  )
+                                : Container(color: Colors.white10),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 16),

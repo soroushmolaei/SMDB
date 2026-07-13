@@ -260,7 +260,30 @@ class TmdbService {
   }
 
   Future<Map<String, dynamic>> getShowDetails(int tmdbId) {
-    return _get('/tv/$tmdbId', {});
+    return _get(
+      '/tv/$tmdbId',
+      {'append_to_response': 'credits,content_ratings'},
+    );
+  }
+
+  /// Extracts a single TV certification string (preferring US) from the
+  /// `content_ratings` block appended to [getShowDetails].
+  static String? extractShowCertification(Map<String, dynamic> details) {
+    final contentRatings =
+        details['content_ratings'] as Map<String, dynamic>?;
+    final results = contentRatings?['results'] as List<dynamic>?;
+    if (results == null || results.isEmpty) return null;
+
+    Map<String, dynamic>? preferred;
+    for (final entry in results) {
+      if (entry['iso_3166_1'] == 'US') {
+        preferred = entry as Map<String, dynamic>;
+        break;
+      }
+    }
+    preferred ??= results.first as Map<String, dynamic>;
+    final rating = preferred['rating'] as String?;
+    return (rating != null && rating.isNotEmpty) ? rating : null;
   }
 
   Future<Map<String, dynamic>> getSeasonDetails(

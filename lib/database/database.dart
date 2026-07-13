@@ -57,6 +57,7 @@ class Shows extends Table {
   TextColumn get backdropPath => text().nullable()();
   RealColumn get rating => real().nullable()();
   TextColumn get genres => text().nullable()();
+  TextColumn get contentRating => text().nullable()(); // e.g. TV-14, TV-MA
   TextColumn get status => text().nullable()();
   TextColumn get folderPath => text()();
   DateTimeColumn get dateAdded => dateTime().withDefault(currentDateAndTime)();
@@ -90,6 +91,15 @@ class MovieCredits extends Table {
   IntColumn get movieId => integer().references(Movies, #id)();
   IntColumn get personId => integer().references(People, #id)();
   TextColumn get role => text()(); // 'actor' | 'director' | 'writer'
+  TextColumn get character => text().nullable()();
+}
+
+@DataClassName('ShowCredit')
+class ShowCredits extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get showId => integer().references(Shows, #id)();
+  IntColumn get personId => integer().references(People, #id)();
+  TextColumn get role => text()(); // 'actor' | 'creator'
   TextColumn get character => text().nullable()();
 }
 
@@ -130,13 +140,14 @@ class MovieCreditInput {
     AppSettings,
     People,
     MovieCredits,
+    ShowCredits,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -153,6 +164,10 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 4) {
             await m.addColumn(movies, movies.contentRating);
+          }
+          if (from < 5) {
+            await m.addColumn(shows, shows.contentRating);
+            await m.createTable(showCredits);
           }
         },
       );
@@ -326,6 +341,67 @@ class AppDatabase extends _$AppDatabase {
           watchedDate: Value(watched ? DateTime.now() : null),
         ),
       );
+
+  /// Fills in rich per-episode metadata found after the initial file scan
+  /// (title, overview, air date, thumbnail), matched by season/episode
+  /// number within a show.
+  Future<void> updateEpisodeMetadata(
+    int showId,
+    int seasonNumber,
+    int episodeNumber, {
+    String? title,
+    String? overview,
+    String? airDate,
+    String? stillPath,
+  }) async {
+    await (update(episodes)
+          ..where((e) =>
+              e.showId.equals(showId) &
+              e.seasonNumber.equals(seasonNumber) &
+              e.episodeNumber.equals(episodeNumber)))
+        .write(EpisodesCompanion(
+      title: Value(title),
+      overview: Value(overview),
+      airDate: Value(airDate),
+      stillPath: Value(stillPath),
+    ));
+  }
+
+  /// Applies arbitrary field edits to an existing show.
+  Future<void> updateShowDetails(int id, ShowsCompanion data) =>
+      (update(shows)..where((s) => s.id.equals(id))).write(data);
+
+  /// Deletes a show along with its episodes and cast/crew links.
+  Future<void> deleteShow(int id) async {
+    await (delete(episodes)..where((e) => e.showId.equals(id))).go();
+    await (delete(showCredits)..where((c) => c.showId.equals(id))).go();
+    await (delete(shows)..where((s) => s.id.equals(id))).go();
+  }
+
+  Stream<List<ShowCredit>> watchAllShowCredits() =>
+      select(showCredits).watch();
+
+  /// Replaces all credits for [showId] with [credits] (find-or-create the
+  /// person for each, then link). Safe to call on re-scan.
+  Future<void> setShowCredits(
+    int showId,
+    List<MovieCreditInput> credits,
+  ) async {
+    await (delete(showCredits)..where((c) => c.showId.equals(showId))).go();
+    for (final credit in credits) {
+      if (credit.name.trim().isEmpty) continue;
+      final personId = await findOrCreatePerson(
+        credit.name,
+        photoPath: credit.photoPath,
+      );
+      await into(showCredits).insert(ShowCreditsCompanion.insert(
+        showId: showId,
+        personId: personId,
+        role: credit.role,
+        character: Value(credit.character),
+      ));
+    }
+  }
 
   // --- Settings ------------------------------------------------------------
 

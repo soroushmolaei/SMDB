@@ -7,6 +7,7 @@ import '../widgets/poster_card.dart';
 import 'movie_detail_screen.dart';
 import 'people_tab.dart';
 import 'settings_screen.dart';
+import 'show_detail_screen.dart';
 
 class LibraryScreen extends ConsumerStatefulWidget {
   const LibraryScreen({super.key});
@@ -319,7 +320,12 @@ class _LibraryScreenState extends ConsumerState<LibraryScreen>
                           title: show.title,
                           posterUrl: show.posterPath,
                           watched: false,
-                          onTap: () {},
+                          onTap: () => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  ShowDetailScreen(showId: show.id),
+                            ),
+                          ),
                         );
                       },
                     );

@@ -36,6 +36,15 @@ final allCreditsStreamProvider = StreamProvider<List<MovieCredit>>((ref) {
   return ref.watch(databaseProvider).watchAllCredits();
 });
 
+final allShowCreditsStreamProvider = StreamProvider<List<ShowCredit>>((ref) {
+  return ref.watch(databaseProvider).watchAllShowCredits();
+});
+
+final episodesForShowProvider =
+    StreamProvider.family<List<Episode>, int>((ref, showId) {
+  return ref.watch(databaseProvider).watchEpisodesForShow(showId);
+});
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -162,6 +171,32 @@ class _MovieMatch {
     this.director,
     this.writer,
     this.castNames,
+    this.credits = const [],
+  });
+}
+
+class _ShowMatch {
+  final int? tmdbId;
+  final String? imdbId;
+  final String? overview;
+  final String? posterPath;
+  final String? backdropPath;
+  final double? rating;
+  final String? genres;
+  final String? contentRating;
+  final String? status;
+  final List<MovieCreditInput> credits;
+
+  _ShowMatch({
+    this.tmdbId,
+    this.imdbId,
+    this.overview,
+    this.posterPath,
+    this.backdropPath,
+    this.rating,
+    this.genres,
+    this.contentRating,
+    this.status,
     this.credits = const [],
   });
 }
@@ -456,6 +491,7 @@ class ScanController extends StateNotifier<ScanState> {
   Future<void> scanShowFolder(String path) async {
     final tmdb = ref.read(tmdbServiceProvider);
     final omdb = ref.read(omdbServiceProvider);
+    _tmdbConsecutiveFailures = 0;
     state = const ScanState(status: ScanStatus.scanning);
 
     final shows = await LibraryScanner.scanShows(path);
@@ -490,29 +526,11 @@ class ScanController extends StateNotifier<ScanState> {
         continue;
       }
 
-      var matchedThisItem = false;
+      _ShowMatch? match;
 
       if (omdb != null) {
         try {
-          final data = await omdb.lookupShow(show.title);
-          if (data != null) {
-            final totalSeasons = data['totalSeasons'];
-            final statusText = (data['Status'] as String?) ??
-                (totalSeasons != null ? '$totalSeasons seasons' : null);
-            await db.upsertShow(ShowsCompanion.insert(
-              title: show.title,
-              folderPath: show.folderPath,
-              overview: Value(OmdbService.cleanText(data['Plot'] as String?)),
-              posterPath:
-                  Value(OmdbService.posterUrl(data['Poster'] as String?)),
-              rating: Value(
-                  OmdbService.parseRating(data['imdbRating'] as String?)),
-              genres: Value(OmdbService.cleanText(data['Genre'] as String?)),
-              status: Value(statusText),
-            ));
-            matchedThisItem = true;
-            state = state.copyWith(matched: state.matched + 1);
-          }
+          match = await _matchShowOmdb(omdb, show.title);
         } catch (e) {
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
@@ -521,36 +539,14 @@ class ScanController extends StateNotifier<ScanState> {
         }
       }
 
-      if (!matchedThisItem && tmdb != null) {
+      if (match == null &&
+          tmdb != null &&
+          _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold) {
         try {
-          final results = await tmdb.searchTvShow(show.title);
-          if (results.isNotEmpty) {
-            final best = results.first;
-            final details = await tmdb.getShowDetails(best.id);
-            final overview = details['overview'] as String?;
-            final posterPath = details['poster_path'] as String?;
-            final backdropPath = details['backdrop_path'] as String?;
-            final rating = (details['vote_average'] as num?)?.toDouble();
-            final showStatus = details['status'] as String?;
-            final genreList = (details['genres'] as List<dynamic>?) ?? [];
-            final genres = genreList.map((g) => g['name']).join(', ');
-
-            await db.upsertShow(ShowsCompanion.insert(
-              title: show.title,
-              folderPath: show.folderPath,
-              tmdbId: Value(best.id),
-              overview: Value(overview),
-              posterPath: Value(TmdbService.imageUrl(posterPath)),
-              backdropPath:
-                  Value(TmdbService.imageUrl(backdropPath, size: 'w1280')),
-              rating: Value(rating),
-              genres: Value(genres),
-              status: Value(showStatus),
-            ));
-            matchedThisItem = true;
-            state = state.copyWith(matched: state.matched + 1);
-          }
+          match = await _matchShowTmdb(tmdb, show.title);
+          _tmdbConsecutiveFailures = 0;
         } catch (e) {
+          _tmdbConsecutiveFailures++;
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
             lastError: 'TMDB: $e',
@@ -558,10 +554,206 @@ class ScanController extends StateNotifier<ScanState> {
         }
       }
 
+      if (match != null) {
+        await db.upsertShow(ShowsCompanion.insert(
+          title: show.title,
+          folderPath: show.folderPath,
+          tmdbId: Value(match.tmdbId),
+          overview: Value(match.overview),
+          posterPath: Value(match.posterPath),
+          backdropPath: Value(match.backdropPath),
+          rating: Value(match.rating),
+          genres: Value(match.genres),
+          contentRating: Value(match.contentRating),
+          status: Value(match.status),
+        ));
+        try {
+          await db.setShowCredits(showId, match.credits);
+        } catch (_) {
+          // Credits are a nice-to-have; don't fail the whole item over it.
+        }
+
+        final seasonNumbers = show.episodes.map((e) => e.season).toSet();
+        final tmdbForEpisodes =
+            _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
+                ? tmdb
+                : null;
+        try {
+          await _enrichEpisodes(
+            showId,
+            seasonNumbers,
+            tmdbId: match.tmdbId,
+            imdbId: match.imdbId,
+            tmdb: tmdbForEpisodes,
+            omdb: omdb,
+          );
+        } catch (_) {
+          // Episode-level enrichment is best-effort.
+        }
+
+        state = state.copyWith(matched: state.matched + 1);
+      }
+
       state = state.copyWith(processed: state.processed + 1);
     }
 
     state = state.copyWith(status: ScanStatus.done);
+  }
+
+  Future<_ShowMatch?> _matchShowOmdb(OmdbService omdb, String title) async {
+    final data = await omdb.lookupShow(title);
+    if (data == null) return null;
+
+    final credits = <MovieCreditInput>[];
+    void addNames(String? raw, String role) {
+      final cleaned = OmdbService.cleanText(raw);
+      if (cleaned == null) return;
+      for (final name in cleaned.split(',')) {
+        final trimmed = name.trim();
+        if (trimmed.isNotEmpty) {
+          credits.add(MovieCreditInput(name: trimmed, role: role));
+        }
+      }
+    }
+
+    addNames(data['Writer'] as String?, 'creator');
+    addNames(data['Actors'] as String?, 'actor');
+
+    final totalSeasons = data['totalSeasons'];
+    final statusText = (data['Status'] as String?) ??
+        (totalSeasons != null ? '$totalSeasons seasons' : null);
+
+    return _ShowMatch(
+      imdbId: data['imdbID'] as String?,
+      overview: OmdbService.cleanText(data['Plot'] as String?),
+      posterPath: OmdbService.posterUrl(data['Poster'] as String?),
+      rating: OmdbService.parseRating(data['imdbRating'] as String?),
+      genres: OmdbService.cleanText(data['Genre'] as String?),
+      contentRating: OmdbService.cleanText(data['Rated'] as String?),
+      status: statusText,
+      credits: credits,
+    );
+  }
+
+  Future<_ShowMatch?> _matchShowTmdb(TmdbService tmdb, String title) async {
+    final results = await tmdb.searchTvShow(title);
+    if (results.isEmpty) return null;
+    final best = results.first;
+    final details = await tmdb.getShowDetails(best.id);
+
+    final genreList = (details['genres'] as List<dynamic>?) ?? [];
+    final genres = genreList.map((g) => g['name']).join(', ');
+
+    final credits = <MovieCreditInput>[];
+    final createdBy = (details['created_by'] as List<dynamic>?) ?? [];
+    for (final c in createdBy) {
+      final name = c['name'] as String?;
+      if (name != null && name.isNotEmpty) {
+        credits.add(MovieCreditInput(
+          name: name,
+          role: 'creator',
+          photoPath: TmdbService.imageUrl(
+            c['profile_path'] as String?,
+            size: 'w185',
+          ),
+        ));
+      }
+    }
+    final creditsMap = details['credits'] as Map<String, dynamic>?;
+    if (creditsMap != null) {
+      final cast = (creditsMap['cast'] as List<dynamic>?) ?? [];
+      for (final c in cast.take(30)) {
+        final name = c['name'] as String?;
+        if (name == null || name.isEmpty) continue;
+        credits.add(MovieCreditInput(
+          name: name,
+          role: 'actor',
+          character: c['character'] as String?,
+          photoPath: TmdbService.imageUrl(
+            c['profile_path'] as String?,
+            size: 'w185',
+          ),
+        ));
+      }
+    }
+
+    return _ShowMatch(
+      tmdbId: best.id,
+      overview: details['overview'] as String?,
+      posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
+      backdropPath: TmdbService.imageUrl(
+        details['backdrop_path'] as String?,
+        size: 'w1280',
+      ),
+      rating: (details['vote_average'] as num?)?.toDouble(),
+      genres: genres,
+      contentRating: TmdbService.extractShowCertification(details),
+      status: details['status'] as String?,
+      credits: credits,
+    );
+  }
+
+  /// Fetches per-episode title/overview/air date/thumbnail one season at a
+  /// time and writes them onto the already-inserted episode rows.
+  Future<void> _enrichEpisodes(
+    int showId,
+    Set<int> seasonNumbers, {
+    int? tmdbId,
+    String? imdbId,
+    required TmdbService? tmdb,
+    required OmdbService? omdb,
+  }) async {
+    for (final seasonNum in seasonNumbers) {
+      var gotFromTmdb = false;
+      if (tmdbId != null && tmdb != null) {
+        try {
+          final seasonData = await tmdb.getSeasonDetails(tmdbId, seasonNum);
+          final episodesList =
+              (seasonData['episodes'] as List<dynamic>?) ?? [];
+          for (final ep in episodesList) {
+            final epNum = ep['episode_number'] as int?;
+            if (epNum == null) continue;
+            await db.updateEpisodeMetadata(
+              showId,
+              seasonNum,
+              epNum,
+              title: ep['name'] as String?,
+              overview: ep['overview'] as String?,
+              airDate: ep['air_date'] as String?,
+              stillPath: TmdbService.imageUrl(
+                ep['still_path'] as String?,
+                size: 'w300',
+              ),
+            );
+          }
+          gotFromTmdb = episodesList.isNotEmpty;
+        } catch (_) {
+          // Fall through to try OMDb for this season.
+        }
+      }
+
+      if (!gotFromTmdb && imdbId != null && omdb != null) {
+        try {
+          final episodesList = await omdb.getSeasonEpisodes(
+            imdbId,
+            seasonNum,
+          );
+          for (final ep in episodesList) {
+            final epNum = int.tryParse(ep['Episode'] as String? ?? '');
+            if (epNum == null) continue;
+            await db.updateEpisodeMetadata(
+              showId,
+              seasonNum,
+              epNum,
+              title: OmdbService.cleanText(ep['Title'] as String?),
+              airDate: OmdbService.cleanText(ep['Released'] as String?),
+            );
+          }
+        } catch (_) {
+          // Episode enrichment is best-effort; skip silently.
+        }
+      }
+    }
   }
 }
 

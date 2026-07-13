@@ -192,6 +192,21 @@ class OmdbService {
     return null;
   }
 
+  /// Fetches the episode list for one season of a show, given the show's
+  /// IMDb ID. Each entry has Title, Released, Episode, imdbID — no
+  /// per-episode plot/poster in this call (OMDb doesn't include those at
+  /// the season-list level).
+  Future<List<Map<String, dynamic>>> getSeasonEpisodes(
+    String showImdbId,
+    int seasonNumber,
+  ) async {
+    final data = await _get({'i': showImdbId, 'Season': '$seasonNumber'});
+    if (data['Response'] != 'True') return [];
+    final episodes = data['Episodes'] as List<dynamic>?;
+    if (episodes == null) return [];
+    return episodes.cast<Map<String, dynamic>>();
+  }
+
   static String? posterUrl(String? raw) {
     if (raw == null || raw.isEmpty || raw == 'N/A') return null;
     return raw;
