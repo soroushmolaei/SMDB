@@ -196,6 +196,9 @@ class AppDatabase extends _$AppDatabase {
       (select(movies)..orderBy([(m) => OrderingTerm(expression: m.title)]))
           .watch();
 
+  Future<Movie?> getMovieById(int id) =>
+      (select(movies)..where((m) => m.id.equals(id))).getSingleOrNull();
+
   Future<Movie?> getMovieByFilePath(String filePath) =>
       (select(movies)..where((m) => m.filePath.equals(filePath)))
           .getSingleOrNull();
@@ -292,6 +295,9 @@ class AppDatabase extends _$AppDatabase {
       (select(shows)..orderBy([(s) => OrderingTerm(expression: s.title)]))
           .watch();
 
+  Future<Show?> getShowById(int id) =>
+      (select(shows)..where((s) => s.id.equals(id))).getSingleOrNull();
+
   Future<Show?> getShowByFolderPath(String folderPath) =>
       (select(shows)..where((s) => s.folderPath.equals(folderPath)))
           .getSingleOrNull();
@@ -318,6 +324,9 @@ class AppDatabase extends _$AppDatabase {
               (e) => OrderingTerm(expression: e.episodeNumber),
             ]))
           .watch();
+
+  Future<List<Episode>> getEpisodesForShowOnce(int showId) =>
+      (select(episodes)..where((e) => e.showId.equals(showId))).get();
 
   Future<Episode?> getEpisodeByFilePath(String filePath) =>
       (select(episodes)..where((e) => e.filePath.equals(filePath)))

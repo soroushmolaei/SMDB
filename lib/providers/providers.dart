@@ -408,12 +408,13 @@ class ScanController extends StateNotifier<ScanState> {
     addNames(data['Actors'] as String?, 'actor');
 
     int? tmdbId;
+    String? backdropPath;
     var contentRating = OmdbService.cleanText(data['Rated'] as String?);
 
-    // Supplementary: OMDb's basic response only lists a handful of actors
-    // with no photos. If TMDB is reachable, use it just for a fuller,
-    // photo-backed cast/crew list — the movie's own metadata still comes
-    // from OMDb above.
+    // Supplementary: OMDb has no backdrop image and its basic response only
+    // lists a handful of actors with no photos. If TMDB is reachable, use
+    // it for a fuller, photo-backed cast/crew list and the backdrop — the
+    // movie's own metadata still comes from OMDb above.
     if (tmdbForEnrichment != null) {
       try {
         final tmdbResults =
@@ -421,6 +422,10 @@ class ScanController extends StateNotifier<ScanState> {
         if (tmdbResults.isNotEmpty) {
           final tmdbDetails =
               await tmdbForEnrichment.getMovieDetails(tmdbResults.first.id);
+          backdropPath = TmdbService.imageUrl(
+            tmdbDetails['backdrop_path'] as String?,
+            size: 'w1280',
+          );
           final extracted = _extractTmdbCredits(
             tmdbDetails['credits'] as Map<String, dynamic>?,
           );
@@ -442,6 +447,7 @@ class ScanController extends StateNotifier<ScanState> {
       tmdbId: tmdbId,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
+      backdropPath: backdropPath,
       rating: OmdbService.parseRating(data['imdbRating'] as String?),
       runtimeMinutes:
           OmdbService.parseRuntimeMinutes(data['Runtime'] as String?),
@@ -530,7 +536,11 @@ class ScanController extends StateNotifier<ScanState> {
 
       if (omdb != null) {
         try {
-          match = await _matchShowOmdb(omdb, show.title);
+          final tmdbForEnrichment =
+              _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
+                  ? tmdb
+                  : null;
+          match = await _matchShowOmdb(omdb, tmdbForEnrichment, show.title);
         } catch (e) {
           state = state.copyWith(
             networkErrors: state.networkErrors + 1,
@@ -600,7 +610,11 @@ class ScanController extends StateNotifier<ScanState> {
     state = state.copyWith(status: ScanStatus.done);
   }
 
-  Future<_ShowMatch?> _matchShowOmdb(OmdbService omdb, String title) async {
+  Future<_ShowMatch?> _matchShowOmdb(
+    OmdbService omdb,
+    TmdbService? tmdbForEnrichment,
+    String title,
+  ) async {
     final data = await omdb.lookupShow(title);
     if (data == null) return null;
 
@@ -623,13 +637,80 @@ class ScanController extends StateNotifier<ScanState> {
     final statusText = (data['Status'] as String?) ??
         (totalSeasons != null ? '$totalSeasons seasons' : null);
 
+    int? tmdbId;
+    String? backdropPath;
+    var contentRating = OmdbService.cleanText(data['Rated'] as String?);
+
+    // Supplementary: OMDb has no backdrop image and only a handful of
+    // actors with no photos. If TMDB is reachable, use it for a fuller,
+    // photo-backed cast list and the backdrop — the show's own metadata
+    // (poster, overview, rating) still comes from OMDb above.
+    if (tmdbForEnrichment != null) {
+      try {
+        final tmdbResults = await tmdbForEnrichment.searchTvShow(title);
+        if (tmdbResults.isNotEmpty) {
+          final tmdbDetails =
+              await tmdbForEnrichment.getShowDetails(tmdbResults.first.id);
+          backdropPath = TmdbService.imageUrl(
+            tmdbDetails['backdrop_path'] as String?,
+            size: 'w1280',
+          );
+          final tmdbCredits = <MovieCreditInput>[];
+          final createdBy =
+              (tmdbDetails['created_by'] as List<dynamic>?) ?? [];
+          for (final c in createdBy) {
+            final name = c['name'] as String?;
+            if (name != null && name.isNotEmpty) {
+              tmdbCredits.add(MovieCreditInput(
+                name: name,
+                role: 'creator',
+                photoPath: TmdbService.imageUrl(
+                  c['profile_path'] as String?,
+                  size: 'w185',
+                ),
+              ));
+            }
+          }
+          final creditsMap = tmdbDetails['credits'] as Map<String, dynamic>?;
+          if (creditsMap != null) {
+            final cast = (creditsMap['cast'] as List<dynamic>?) ?? [];
+            for (final c in cast.take(30)) {
+              final name = c['name'] as String?;
+              if (name == null || name.isEmpty) continue;
+              tmdbCredits.add(MovieCreditInput(
+                name: name,
+                role: 'actor',
+                character: c['character'] as String?,
+                photoPath: TmdbService.imageUrl(
+                  c['profile_path'] as String?,
+                  size: 'w185',
+                ),
+              ));
+            }
+          }
+          if (tmdbCredits.isNotEmpty) {
+            credits
+              ..clear()
+              ..addAll(tmdbCredits);
+          }
+          contentRating ??= TmdbService.extractShowCertification(tmdbDetails);
+          tmdbId = tmdbResults.first.id;
+        }
+      } catch (_) {
+        // Keep the OMDb-derived names/no-backdrop as a fallback; this
+        // enrichment step is optional.
+      }
+    }
+
     return _ShowMatch(
+      tmdbId: tmdbId,
       imdbId: data['imdbID'] as String?,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
+      backdropPath: backdropPath,
       rating: OmdbService.parseRating(data['imdbRating'] as String?),
       genres: OmdbService.cleanText(data['Genre'] as String?),
-      contentRating: OmdbService.cleanText(data['Rated'] as String?),
+      contentRating: contentRating,
       status: statusText,
       credits: credits,
     );
@@ -754,6 +835,161 @@ class ScanController extends StateNotifier<ScanState> {
         }
       }
     }
+  }
+
+  /// Re-runs matching for a single already-scanned movie (the "Update"
+  /// button on the movie detail screen), using its stored title/year.
+  Future<bool> refreshMovie(int movieId) async {
+    final movie = await db.getMovieById(movieId);
+    if (movie == null) return false;
+    final tmdb = ref.read(tmdbServiceProvider);
+    final omdb = ref.read(omdbServiceProvider);
+
+    state = ScanState(
+      status: ScanStatus.matching,
+      total: 1,
+      processed: 0,
+      currentItem: movie.title,
+    );
+
+    _MovieMatch? match;
+    if (omdb != null) {
+      try {
+        match = await _matchMovieOmdb(omdb, tmdb, movie.title, movie.year);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'OMDb: $e',
+        );
+      }
+    }
+    if (match == null && tmdb != null) {
+      try {
+        match = await _matchMovieTmdb(tmdb, movie.title, movie.year);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'TMDB: $e',
+        );
+      }
+    }
+
+    var success = false;
+    if (match != null) {
+      await db.upsertMovie(MoviesCompanion.insert(
+        title: movie.title,
+        filePath: movie.filePath,
+        folderPath: movie.folderPath,
+        year: Value(movie.year),
+        tmdbId: Value(match.tmdbId),
+        overview: Value(match.overview),
+        posterPath: Value(match.posterPath),
+        backdropPath: Value(match.backdropPath),
+        rating: Value(match.rating),
+        runtimeMinutes: Value(match.runtimeMinutes),
+        genres: Value(match.genres),
+        contentRating: Value(match.contentRating),
+        director: Value(match.director),
+        writer: Value(match.writer),
+        castNames: Value(match.castNames),
+      ));
+      try {
+        await db.setMovieCredits(movieId, match.credits);
+      } catch (_) {
+        // Non-fatal.
+      }
+      success = true;
+    }
+
+    state = state.copyWith(
+      status: ScanStatus.done,
+      processed: 1,
+      matched: success ? 1 : 0,
+    );
+    return success;
+  }
+
+  /// Re-runs matching for a single already-scanned show, including
+  /// re-enriching its episodes (the "Update" button on the show detail
+  /// screen).
+  Future<bool> refreshShow(int showId) async {
+    final show = await db.getShowById(showId);
+    if (show == null) return false;
+    final tmdb = ref.read(tmdbServiceProvider);
+    final omdb = ref.read(omdbServiceProvider);
+
+    state = ScanState(
+      status: ScanStatus.matching,
+      total: 1,
+      processed: 0,
+      currentItem: show.title,
+    );
+
+    _ShowMatch? match;
+    if (omdb != null) {
+      try {
+        match = await _matchShowOmdb(omdb, tmdb, show.title);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'OMDb: $e',
+        );
+      }
+    }
+    if (match == null && tmdb != null) {
+      try {
+        match = await _matchShowTmdb(tmdb, show.title);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'TMDB: $e',
+        );
+      }
+    }
+
+    var success = false;
+    if (match != null) {
+      await db.upsertShow(ShowsCompanion.insert(
+        title: show.title,
+        folderPath: show.folderPath,
+        tmdbId: Value(match.tmdbId),
+        overview: Value(match.overview),
+        posterPath: Value(match.posterPath),
+        backdropPath: Value(match.backdropPath),
+        rating: Value(match.rating),
+        genres: Value(match.genres),
+        contentRating: Value(match.contentRating),
+        status: Value(match.status),
+      ));
+      try {
+        await db.setShowCredits(showId, match.credits);
+      } catch (_) {
+        // Non-fatal.
+      }
+
+      try {
+        final episodes = await db.getEpisodesForShowOnce(showId);
+        final seasonNumbers = episodes.map((e) => e.seasonNumber).toSet();
+        await _enrichEpisodes(
+          showId,
+          seasonNumbers,
+          tmdbId: match.tmdbId,
+          imdbId: match.imdbId,
+          tmdb: tmdb,
+          omdb: omdb,
+        );
+      } catch (_) {
+        // Non-fatal.
+      }
+      success = true;
+    }
+
+    state = state.copyWith(
+      status: ScanStatus.done,
+      processed: 1,
+      matched: success ? 1 : 0,
+    );
+    return success;
   }
 }
 

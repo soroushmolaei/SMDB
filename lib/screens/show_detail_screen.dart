@@ -44,6 +44,43 @@ class ShowDetailScreen extends ConsumerWidget {
                 expandedHeight: 220,
                 pinned: true,
                 actions: [
+                  Builder(
+                    builder: (context) {
+                      final scanState = ref.watch(scanControllerProvider);
+                      final refreshing =
+                          scanState.status == ScanStatus.matching &&
+                              scanState.currentItem == show.title;
+                      return IconButton(
+                        icon: refreshing
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                    strokeWidth: 2),
+                              )
+                            : const Icon(Icons.refresh),
+                        tooltip: 'Update metadata',
+                        onPressed: refreshing
+                            ? null
+                            : () async {
+                                final ok = await ref
+                                    .read(scanControllerProvider.notifier)
+                                    .refreshShow(show.id);
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        ok
+                                            ? 'Updated'
+                                            : 'No match found',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                      );
+                    },
+                  ),
                   IconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Edit',

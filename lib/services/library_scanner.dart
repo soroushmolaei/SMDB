@@ -157,24 +157,55 @@ class LibraryScanner {
     return found;
   }
 
-  /// Scans [rootPath] for shows: one subfolder per show. Episodes may sit
-  /// directly in the show folder or nested under "Season N" subfolders.
+  /// Scans [rootPath] for shows. Handles two folder layouts:
+  ///  - a library folder containing one subfolder per show, e.g.
+  ///    "TV/Breaking Bad/Season 01/...", "TV/24/Season 01/..."
+  ///  - [rootPath] itself being a single show's folder, e.g. pointing
+  ///    directly at ".../24" which contains "Season 01", "Season 02", ...
+  ///    In that case treating each season folder as its own "show" would be
+  ///    wrong, so this is detected and handled as one show instead.
   static Future<List<ScannedShow>> scanShows(String rootPath) async {
     final root = Directory(rootPath);
     if (!await root.exists()) return [];
 
+    final immediateDirs = await root
+        .list(followLinks: false)
+        .where((e) => e is Directory)
+        .cast<Directory>()
+        .toList();
+
+    if (immediateDirs.isNotEmpty &&
+        immediateDirs.every((d) => _looksLikeSeasonFolder(p.basename(d.path)))) {
+      final episodes = await _scanShowEpisodes(root);
+      if (episodes.isEmpty) return [];
+      return [
+        ScannedShow(
+          title: parseTitleAndYear(p.basename(root.path)).title,
+          folderPath: root.path,
+          episodes: episodes,
+        ),
+      ];
+    }
+
     final shows = <ScannedShow>[];
-    await for (final entity in root.list(followLinks: false)) {
-      if (entity is! Directory) continue;
-      final episodes = await _scanShowEpisodes(entity);
+    for (final dir in immediateDirs) {
+      final episodes = await _scanShowEpisodes(dir);
       if (episodes.isEmpty) continue;
       shows.add(ScannedShow(
-        title: parseTitleAndYear(p.basename(entity.path)).title,
-        folderPath: entity.path,
+        title: parseTitleAndYear(p.basename(dir.path)).title,
+        folderPath: dir.path,
         episodes: episodes,
       ));
     }
     return shows;
+  }
+
+  static bool _looksLikeSeasonFolder(String name) {
+    final trimmed = name.trim();
+    return RegExp(r'^season\s*\d{1,2}$', caseSensitive: false)
+            .hasMatch(trimmed) ||
+        RegExp(r'^s\d{1,2}$', caseSensitive: false).hasMatch(trimmed) ||
+        RegExp(r'^specials?$', caseSensitive: false).hasMatch(trimmed);
   }
 
   static Future<List<ScannedEpisode>> _scanShowEpisodes(
