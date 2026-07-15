@@ -147,6 +147,7 @@ class ScanState {
 
 class _MovieMatch {
   final int? tmdbId;
+  final String? imdbId;
   final String? overview;
   final String? posterPath;
   final String? backdropPath;
@@ -161,6 +162,7 @@ class _MovieMatch {
 
   _MovieMatch({
     this.tmdbId,
+    this.imdbId,
     this.overview,
     this.posterPath,
     this.backdropPath,
@@ -357,6 +359,7 @@ class ScanController extends StateNotifier<ScanState> {
           folderPath: item.folderPath,
           year: Value(item.year),
           tmdbId: Value(match.tmdbId),
+          imdbId: Value(match.imdbId),
           overview: Value(match.overview),
           posterPath: Value(match.posterPath),
           backdropPath: Value(match.backdropPath),
@@ -445,6 +448,7 @@ class ScanController extends StateNotifier<ScanState> {
 
     return _MovieMatch(
       tmdbId: tmdbId,
+      imdbId: data['imdbID'] as String?,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
       backdropPath: backdropPath,
@@ -477,6 +481,7 @@ class ScanController extends StateNotifier<ScanState> {
 
     return _MovieMatch(
       tmdbId: best.id,
+      imdbId: details['imdb_id'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
       backdropPath: TmdbService.imageUrl(
@@ -569,6 +574,7 @@ class ScanController extends StateNotifier<ScanState> {
           title: show.title,
           folderPath: show.folderPath,
           tmdbId: Value(match.tmdbId),
+          imdbId: Value(match.imdbId),
           overview: Value(match.overview),
           posterPath: Value(match.posterPath),
           backdropPath: Value(match.backdropPath),
@@ -882,6 +888,7 @@ class ScanController extends StateNotifier<ScanState> {
         folderPath: movie.folderPath,
         year: Value(movie.year),
         tmdbId: Value(match.tmdbId),
+          imdbId: Value(match.imdbId),
         overview: Value(match.overview),
         posterPath: Value(match.posterPath),
         backdropPath: Value(match.backdropPath),
@@ -953,6 +960,7 @@ class ScanController extends StateNotifier<ScanState> {
         title: show.title,
         folderPath: show.folderPath,
         tmdbId: Value(match.tmdbId),
+          imdbId: Value(match.imdbId),
         overview: Value(match.overview),
         posterPath: Value(match.posterPath),
         backdropPath: Value(match.backdropPath),

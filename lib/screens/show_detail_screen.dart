@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
@@ -207,6 +208,36 @@ class ShowDetailScreen extends ConsumerWidget {
                                   ],
                                 ),
                               ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: Icon(
+                                    show.isFavorite
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color:
+                                        show.isFavorite ? Colors.amber : null,
+                                  ),
+                                  tooltip: 'Favorite',
+                                  onPressed: () => ref
+                                      .read(databaseProvider)
+                                      .setShowFavorite(
+                                          show.id, !show.isFavorite),
+                                ),
+                                if (show.imdbId != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.open_in_new),
+                                    tooltip: 'Open on IMDb',
+                                    onPressed: () => launchUrl(
+                                      Uri.parse(
+                                        'https://www.imdb.com/title/${show.imdbId}/',
+                                      ),
+                                      mode: LaunchMode.externalApplication,
+                                    ),
+                                  ),
+                              ],
+                            ),
                           ],
                         ),
                       ),

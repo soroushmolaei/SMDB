@@ -1,6 +1,7 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/providers.dart';
 import '../widgets/fullscreen_image_viewer.dart';
@@ -200,18 +201,54 @@ class MovieDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                             const SizedBox(height: 12),
-                            FilledButton.tonalIcon(
-                              onPressed: () => ref
-                                  .read(databaseProvider)
-                                  .setMovieWatched(movie.id, !movie.watched),
-                              icon: Icon(
-                                movie.watched
-                                    ? Icons.check_circle
-                                    : Icons.check_circle_outline,
-                              ),
-                              label: Text(
-                                movie.watched ? 'Watched' : 'Mark as watched',
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: FilledButton.tonalIcon(
+                                    onPressed: () => ref
+                                        .read(databaseProvider)
+                                        .setMovieWatched(
+                                            movie.id, !movie.watched),
+                                    icon: Icon(
+                                      movie.watched
+                                          ? Icons.check_circle
+                                          : Icons.check_circle_outline,
+                                    ),
+                                    label: Text(
+                                      movie.watched
+                                          ? 'Watched'
+                                          : 'Mark as watched',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton(
+                                  icon: Icon(
+                                    movie.isFavorite
+                                        ? Icons.star
+                                        : Icons.star_border,
+                                    color: movie.isFavorite
+                                        ? Colors.amber
+                                        : null,
+                                  ),
+                                  tooltip: 'Favorite',
+                                  onPressed: () => ref
+                                      .read(databaseProvider)
+                                      .setMovieFavorite(
+                                          movie.id, !movie.isFavorite),
+                                ),
+                                if (movie.imdbId != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.open_in_new),
+                                    tooltip: 'Open on IMDb',
+                                    onPressed: () => launchUrl(
+                                      Uri.parse(
+                                        'https://www.imdb.com/title/${movie.imdbId}/',
+                                      ),
+                                      mode: LaunchMode.externalApplication,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),

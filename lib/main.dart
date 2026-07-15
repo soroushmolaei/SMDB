@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'screens/library_screen.dart';
+import 'screens/app_shell.dart';
 
 void main() {
   runApp(const ProviderScope(child: SmdbApp()));
@@ -24,7 +24,7 @@ class SmdbApp extends StatelessWidget {
         ),
         scaffoldBackgroundColor: const Color(0xFF121212),
       ),
-      home: const LibraryScreen(),
+      home: const AppShell(),
     );
   }
 }

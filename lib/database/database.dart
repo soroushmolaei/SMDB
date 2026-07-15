@@ -28,6 +28,7 @@ class Movies extends Table {
   TextColumn get originalTitle => text().nullable()();
   IntColumn get year => integer().nullable()();
   IntColumn get tmdbId => integer().nullable()();
+  TextColumn get imdbId => text().nullable()();
   TextColumn get overview => text().nullable()();
   TextColumn get posterPath => text().nullable()();
   TextColumn get backdropPath => text().nullable()();
@@ -44,6 +45,7 @@ class Movies extends Table {
   BoolColumn get watched => boolean().withDefault(const Constant(false))();
   DateTimeColumn get watchedDate => dateTime().nullable()();
   RealColumn get personalRating => real().nullable()();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('Show')
@@ -52,6 +54,7 @@ class Shows extends Table {
   TextColumn get title => text()();
   TextColumn get originalTitle => text().nullable()();
   IntColumn get tmdbId => integer().nullable()();
+  TextColumn get imdbId => text().nullable()();
   TextColumn get overview => text().nullable()();
   TextColumn get posterPath => text().nullable()();
   TextColumn get backdropPath => text().nullable()();
@@ -61,6 +64,7 @@ class Shows extends Table {
   TextColumn get status => text().nullable()();
   TextColumn get folderPath => text()();
   DateTimeColumn get dateAdded => dateTime().withDefault(currentDateAndTime)();
+  BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('Episode')
@@ -147,7 +151,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -168,6 +172,12 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             await m.addColumn(shows, shows.contentRating);
             await m.createTable(showCredits);
+          }
+          if (from < 6) {
+            await m.addColumn(movies, movies.imdbId);
+            await m.addColumn(movies, movies.isFavorite);
+            await m.addColumn(shows, shows.imdbId);
+            await m.addColumn(shows, shows.isFavorite);
           }
         },
       );
@@ -228,6 +238,14 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setPersonalRating(int id, double? rating) =>
       (update(movies)..where((m) => m.id.equals(id)))
           .write(MoviesCompanion(personalRating: Value(rating)));
+
+  Future<void> setMovieFavorite(int id, bool favorite) =>
+      (update(movies)..where((m) => m.id.equals(id)))
+          .write(MoviesCompanion(isFavorite: Value(favorite)));
+
+  Future<void> setShowFavorite(int id, bool favorite) =>
+      (update(shows)..where((s) => s.id.equals(id)))
+          .write(ShowsCompanion(isFavorite: Value(favorite)));
 
   /// Applies an arbitrary set of field edits to an existing movie (used by
   /// the manual edit screen). Only fields set on [data] are changed.
