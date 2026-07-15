@@ -40,6 +40,7 @@ class Movies extends Table {
   TextColumn get writer => text().nullable()();
   TextColumn get castNames => text().nullable()(); // comma separated
   TextColumn get filePath => text()();
+  TextColumn get trailerFilePath => text().nullable()();
   TextColumn get folderPath => text()();
   DateTimeColumn get dateAdded => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get watched => boolean().withDefault(const Constant(false))();
@@ -151,7 +152,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -178,6 +179,9 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(movies, movies.isFavorite);
             await m.addColumn(shows, shows.imdbId);
             await m.addColumn(shows, shows.isFavorite);
+          }
+          if (from < 7) {
+            await m.addColumn(movies, movies.trailerFilePath);
           }
         },
       );

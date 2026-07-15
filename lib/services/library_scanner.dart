@@ -87,11 +87,13 @@ class ScannedMovie {
   final String title;
   final int? year;
   final String filePath;
+  final String? trailerFilePath;
   final String folderPath;
   ScannedMovie({
     required this.title,
     required this.year,
     required this.filePath,
+    this.trailerFilePath,
     required this.folderPath,
   });
 }
@@ -134,18 +136,42 @@ class LibraryScanner {
 
     await for (final entity in root.list(followLinks: false)) {
       if (entity is Directory) {
-        final videoFile = await _largestVideoFile(entity);
-        if (videoFile == null) continue;
+        final videos = await _allVideoFiles(entity);
+        if (videos.isEmpty) continue;
+
+        File? trailer;
+        for (final f in videos) {
+          final name = p.basenameWithoutExtension(f.path);
+          if (_looksLikeTrailer(name)) {
+            trailer ??= f;
+          }
+        }
+        final mainCandidates =
+            videos.where((f) => f.path != trailer?.path).toList();
+        if (mainCandidates.isEmpty) continue;
+
+        File main = mainCandidates.first;
+        var mainSize = -1;
+        for (final f in mainCandidates) {
+          final size = await f.length();
+          if (size > mainSize) {
+            mainSize = size;
+            main = f;
+          }
+        }
+
         final parsed = parseTitleAndYear(p.basename(entity.path));
         found.add(ScannedMovie(
           title: parsed.title,
           year: parsed.year,
-          filePath: videoFile.path,
+          filePath: main.path,
+          trailerFilePath: trailer?.path,
           folderPath: entity.path,
         ));
       } else if (entity is File && isVideoFile(entity.path)) {
-        final parsed =
-            parseTitleAndYear(p.basenameWithoutExtension(entity.path));
+        final nameNoExt = p.basenameWithoutExtension(entity.path);
+        if (_looksLikeTrailer(nameNoExt)) continue;
+        final parsed = parseTitleAndYear(nameNoExt);
         found.add(ScannedMovie(
           title: parsed.title,
           year: parsed.year,
@@ -155,6 +181,10 @@ class LibraryScanner {
       }
     }
     return found;
+  }
+
+  static bool _looksLikeTrailer(String fileName) {
+    return RegExp(r'\btrailer\b', caseSensitive: false).hasMatch(fileName);
   }
 
   /// Scans [rootPath] for shows. Handles two folder layouts:
@@ -226,19 +256,14 @@ class LibraryScanner {
     return episodes;
   }
 
-  static Future<File?> _largestVideoFile(Directory dir) async {
-    File? largest;
-    int largestSize = -1;
+  static Future<List<File>> _allVideoFiles(Directory dir) async {
+    final files = <File>[];
     await for (final entity
         in dir.list(recursive: true, followLinks: false)) {
       if (entity is File && isVideoFile(entity.path)) {
-        final size = await entity.length();
-        if (size > largestSize) {
-          largestSize = size;
-          largest = entity;
-        }
+        files.add(entity);
       }
     }
-    return largest;
+    return files;
   }
 }

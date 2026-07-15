@@ -204,6 +204,33 @@ class MovieDetailScreen extends ConsumerWidget {
                             Row(
                               children: [
                                 Expanded(
+                                  child: FilledButton.icon(
+                                    onPressed: () => launchUrl(
+                                      Uri.file(movie.filePath),
+                                    ),
+                                    icon: const Icon(Icons.play_arrow),
+                                    label: const Text('Play Movie'),
+                                  ),
+                                ),
+                                if (movie.trailerFilePath != null) ...[
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: OutlinedButton.icon(
+                                      onPressed: () => launchUrl(
+                                        Uri.file(movie.trailerFilePath!),
+                                      ),
+                                      icon: const Icon(
+                                          Icons.play_circle_outline),
+                                      label: const Text('Play Trailer'),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Row(
+                              children: [
+                                Expanded(
                                   child: FilledButton.tonalIcon(
                                     onPressed: () => ref
                                         .read(databaseProvider)

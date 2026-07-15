@@ -445,14 +445,26 @@ class _EpisodeTile extends ConsumerWidget {
       subtitle: episode.airDate != null && episode.airDate!.isNotEmpty
           ? Text(episode.airDate!)
           : null,
-      trailing: IconButton(
-        icon: Icon(
-          episode.watched ? Icons.check_circle : Icons.check_circle_outline,
-          color: episode.watched ? Colors.greenAccent.shade400 : null,
-        ),
-        onPressed: () => ref
-            .read(databaseProvider)
-            .setEpisodeWatched(episode.id, !episode.watched),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            icon: const Icon(Icons.play_arrow),
+            tooltip: 'Play episode',
+            onPressed: () => launchUrl(Uri.file(episode.filePath)),
+          ),
+          IconButton(
+            icon: Icon(
+              episode.watched
+                  ? Icons.check_circle
+                  : Icons.check_circle_outline,
+              color: episode.watched ? Colors.greenAccent.shade400 : null,
+            ),
+            onPressed: () => ref
+                .read(databaseProvider)
+                .setEpisodeWatched(episode.id, !episode.watched),
+          ),
+        ],
       ),
       onTap: () {
         if (episode.overview == null || episode.overview!.isEmpty) return;

@@ -306,6 +306,7 @@ class ScanController extends StateNotifier<ScanState> {
           filePath: item.filePath,
           folderPath: item.folderPath,
           year: Value(item.year),
+          trailerFilePath: Value(item.trailerFilePath),
         ));
       } catch (_) {
         state = state.copyWith(processed: state.processed + 1);
@@ -358,6 +359,7 @@ class ScanController extends StateNotifier<ScanState> {
           filePath: item.filePath,
           folderPath: item.folderPath,
           year: Value(item.year),
+          trailerFilePath: Value(item.trailerFilePath),
           tmdbId: Value(match.tmdbId),
           imdbId: Value(match.imdbId),
           overview: Value(match.overview),
@@ -887,6 +889,7 @@ class ScanController extends StateNotifier<ScanState> {
         filePath: movie.filePath,
         folderPath: movie.folderPath,
         year: Value(movie.year),
+        trailerFilePath: Value(movie.trailerFilePath),
         tmdbId: Value(match.tmdbId),
           imdbId: Value(match.imdbId),
         overview: Value(match.overview),
