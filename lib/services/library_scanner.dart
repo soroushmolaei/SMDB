@@ -256,6 +256,22 @@ class LibraryScanner {
     return episodes;
   }
 
+  /// Re-checks a single movie's folder for a trailer file. Used by the
+  /// per-item "Update" action so it can pick up a trailer added after the
+  /// initial scan, without re-scanning the whole library folder.
+  static Future<String?> findTrailerInFolder(String folderPath) async {
+    final dir = Directory(folderPath);
+    if (!await dir.exists()) return null;
+    await for (final entity
+        in dir.list(recursive: true, followLinks: false)) {
+      if (entity is File && isVideoFile(entity.path)) {
+        final name = p.basenameWithoutExtension(entity.path);
+        if (_looksLikeTrailer(name)) return entity.path;
+      }
+    }
+    return null;
+  }
+
   static Future<List<File>> _allVideoFiles(Directory dir) async {
     final files = <File>[];
     await for (final entity

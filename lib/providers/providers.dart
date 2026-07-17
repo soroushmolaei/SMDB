@@ -883,13 +883,15 @@ class ScanController extends StateNotifier<ScanState> {
     }
 
     var success = false;
+    final trailerPath = movie.trailerFilePath ??
+        await LibraryScanner.findTrailerInFolder(movie.folderPath);
     if (match != null) {
       await db.upsertMovie(MoviesCompanion.insert(
         title: movie.title,
         filePath: movie.filePath,
         folderPath: movie.folderPath,
         year: Value(movie.year),
-        trailerFilePath: Value(movie.trailerFilePath),
+        trailerFilePath: Value(trailerPath),
         tmdbId: Value(match.tmdbId),
           imdbId: Value(match.imdbId),
         overview: Value(match.overview),
@@ -909,6 +911,13 @@ class ScanController extends StateNotifier<ScanState> {
         // Non-fatal.
       }
       success = true;
+    } else if (trailerPath != movie.trailerFilePath) {
+      // Even if no metadata match was found, still save a newly detected
+      // trailer.
+      await db.updateMovieDetails(
+        movieId,
+        MoviesCompanion(trailerFilePath: Value(trailerPath)),
+      );
     }
 
     state = state.copyWith(

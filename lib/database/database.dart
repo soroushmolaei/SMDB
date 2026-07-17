@@ -88,6 +88,10 @@ class People extends Table {
   IntColumn get id => integer().autoIncrement()();
   TextColumn get name => text()();
   TextColumn get photoPath => text().nullable()();
+  IntColumn get tmdbPersonId => integer().nullable()();
+  TextColumn get biography => text().nullable()();
+  TextColumn get birthday => text().nullable()();
+  TextColumn get placeOfBirth => text().nullable()();
 }
 
 @DataClassName('MovieCredit')
@@ -152,7 +156,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 8;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -182,6 +186,12 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 7) {
             await m.addColumn(movies, movies.trailerFilePath);
+          }
+          if (from < 8) {
+            await m.addColumn(people, people.tmdbPersonId);
+            await m.addColumn(people, people.biography);
+            await m.addColumn(people, people.birthday);
+            await m.addColumn(people, people.placeOfBirth);
           }
         },
       );
@@ -287,6 +297,34 @@ class AppDatabase extends _$AppDatabase {
       PeopleCompanion.insert(name: trimmed, photoPath: Value(photoPath)),
     );
   }
+
+  /// Fills in biography/birthday/place-of-birth/photo for a person, found
+  /// lazily (only when their detail page is opened) rather than during
+  /// bulk scanning, to avoid a large number of extra API calls per movie.
+  Future<void> updatePersonBio(
+    int personId, {
+    int? tmdbPersonId,
+    String? photoPath,
+    String? biography,
+    String? birthday,
+    String? placeOfBirth,
+  }) =>
+      (update(people)..where((p) => p.id.equals(personId))).write(
+        PeopleCompanion(
+          tmdbPersonId: tmdbPersonId != null
+              ? Value(tmdbPersonId)
+              : const Value.absent(),
+          photoPath:
+              photoPath != null ? Value(photoPath) : const Value.absent(),
+          biography:
+              biography != null ? Value(biography) : const Value.absent(),
+          birthday:
+              birthday != null ? Value(birthday) : const Value.absent(),
+          placeOfBirth: placeOfBirth != null
+              ? Value(placeOfBirth)
+              : const Value.absent(),
+        ),
+      );
 
   /// Replaces all credits for [movieId] with [credits] (find-or-create the
   /// person for each, then link). Safe to call on re-scan.

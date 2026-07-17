@@ -201,54 +201,57 @@ class MovieDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                             const SizedBox(height: 12),
-                            Row(
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
                               children: [
-                                Expanded(
-                                  child: FilledButton.icon(
+                                FilledButton.icon(
+                                  onPressed: () => launchUrl(
+                                    Uri.file(movie.filePath),
+                                  ),
+                                  icon: const Icon(Icons.play_arrow, size: 18),
+                                  label: const Text('Play Movie'),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                  ),
+                                ),
+                                if (movie.trailerFilePath != null)
+                                  OutlinedButton.icon(
                                     onPressed: () => launchUrl(
-                                      Uri.file(movie.filePath),
+                                      Uri.file(movie.trailerFilePath!),
                                     ),
-                                    icon: const Icon(Icons.play_arrow),
-                                    label: const Text('Play Movie'),
+                                    icon: const Icon(
+                                        Icons.play_circle_outline,
+                                        size: 18),
+                                    label: const Text('Play Trailer'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                    ),
+                                  ),
+                                FilledButton.tonalIcon(
+                                  onPressed: () => ref
+                                      .read(databaseProvider)
+                                      .setMovieWatched(
+                                          movie.id, !movie.watched),
+                                  icon: Icon(
+                                    movie.watched
+                                        ? Icons.check_circle
+                                        : Icons.check_circle_outline,
+                                    size: 18,
+                                  ),
+                                  label: Text(
+                                    movie.watched
+                                        ? 'Watched'
+                                        : 'Mark as watched',
+                                  ),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
                                   ),
                                 ),
-                                if (movie.trailerFilePath != null) ...[
-                                  const SizedBox(width: 8),
-                                  Expanded(
-                                    child: OutlinedButton.icon(
-                                      onPressed: () => launchUrl(
-                                        Uri.file(movie.trailerFilePath!),
-                                      ),
-                                      icon: const Icon(
-                                          Icons.play_circle_outline),
-                                      label: const Text('Play Trailer'),
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: FilledButton.tonalIcon(
-                                    onPressed: () => ref
-                                        .read(databaseProvider)
-                                        .setMovieWatched(
-                                            movie.id, !movie.watched),
-                                    icon: Icon(
-                                      movie.watched
-                                          ? Icons.check_circle
-                                          : Icons.check_circle_outline,
-                                    ),
-                                    label: Text(
-                                      movie.watched
-                                          ? 'Watched'
-                                          : 'Mark as watched',
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
                                 IconButton(
                                   icon: Icon(
                                     movie.isFavorite

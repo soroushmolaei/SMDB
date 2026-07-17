@@ -293,6 +293,19 @@ class TmdbService {
     return _get('/tv/$tmdbId/season/$seasonNumber', {});
   }
 
+  /// Searches for a person by name (used to find their TMDB id before
+  /// fetching full biography details).
+  Future<List<Map<String, dynamic>>> searchPerson(String name) async {
+    final data = await _get('/search/person', {'query': name});
+    final results = (data['results'] as List<dynamic>?) ?? [];
+    return results.cast<Map<String, dynamic>>();
+  }
+
+  /// Fetches full details for a specific person, including biography.
+  Future<Map<String, dynamic>> getPersonDetails(int personId) {
+    return _get('/person/$personId', {});
+  }
+
   static String? imageUrl(String? path, {String size = 'w500'}) {
     if (path == null || path.isEmpty) return null;
     return '$imageBaseUrl/$size$path';
