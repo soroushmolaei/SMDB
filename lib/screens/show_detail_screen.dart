@@ -393,13 +393,74 @@ class _CreditsSection extends StatelessWidget {
     );
   }
 
+  Widget _castList(BuildContext context) {
+    final entries = credits.where((c) => c.role == 'actor').toList();
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'CAST',
+            style: TextStyle(fontSize: 12, color: Colors.white38),
+          ),
+          const SizedBox(height: 6),
+          ...entries.map((c) {
+            final person = peopleById[c.personId];
+            return InkWell(
+              onTap: person == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              PersonDetailScreen(personId: person.id),
+                        ),
+                      ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.white10,
+                      backgroundImage: person?.photoPath != null
+                          ? CachedNetworkImageProvider(person!.photoPath!)
+                          : null,
+                      child: person?.photoPath == null
+                          ? const Icon(Icons.person, size: 14)
+                          : null,
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        person?.name ?? 'Unknown',
+                        style: const TextStyle(fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        c.character ?? '',
+                        style: const TextStyle(color: Colors.white54),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _roleSection(context, 'CREATOR', 'creator'),
-        _roleSection(context, 'CAST', 'actor'),
+        _castList(context),
         const SizedBox(height: 8),
       ],
     );
