@@ -6,6 +6,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../widgets/fullscreen_image_viewer.dart';
+import '../widgets/smart_image.dart';
+import 'add_to_group_dialog.dart';
 import 'edit_show_screen.dart';
 import 'genre_shows_screen.dart';
 import 'person_detail_screen.dart';
@@ -132,10 +134,10 @@ class ShowDetailScreen extends ConsumerWidget {
                       show.backdropPath ?? show.posterPath,
                     ),
                     child: show.backdropPath != null
-                        ? CachedNetworkImage(
-                            imageUrl: show.backdropPath!,
+                        ? SmartImage(
+                            path: show.backdropPath!,
                             fit: BoxFit.cover,
-                            errorWidget: (c, u, e) =>
+                            errorBuilder: (c) =>
                                 Container(color: Colors.black26),
                           )
                         : Container(color: Colors.black26),
@@ -159,10 +161,8 @@ class ShowDetailScreen extends ConsumerWidget {
                             width: 110,
                             height: 165,
                             child: show.posterPath != null
-                                ? CachedNetworkImage(
-                                    imageUrl: show.posterPath!,
-                                    fit: BoxFit.cover,
-                                  )
+                                ? SmartImage(
+                                    path: show.posterPath!, fit: BoxFit.cover)
                                 : Container(color: Colors.white10),
                           ),
                         ),
@@ -236,6 +236,17 @@ class ShowDetailScreen extends ConsumerWidget {
                                       mode: LaunchMode.externalApplication,
                                     ),
                                   ),
+                                IconButton(
+                                  icon: const Icon(
+                                      Icons.playlist_add_outlined),
+                                  tooltip: 'Add to group',
+                                  onPressed: () => showAddToGroupDialog(
+                                    context,
+                                    ref,
+                                    kind: 'show',
+                                    itemId: show.id,
+                                  ),
+                                ),
                               ],
                             ),
                           ],
@@ -503,9 +514,19 @@ class _EpisodeTile extends ConsumerWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: episode.airDate != null && episode.airDate!.isNotEmpty
-          ? Text(episode.airDate!)
-          : null,
+      subtitle: Row(
+        children: [
+          if (episode.airDate != null && episode.airDate!.isNotEmpty)
+            Text(episode.airDate!),
+          if (episode.rating != null && episode.rating! > 0) ...[
+            if (episode.airDate != null && episode.airDate!.isNotEmpty)
+              const Text('  •  '),
+            const Icon(Icons.star, size: 12, color: Colors.amber),
+            const SizedBox(width: 2),
+            Text(episode.rating!.toStringAsFixed(1)),
+          ],
+        ],
+      ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -528,7 +549,11 @@ class _EpisodeTile extends ConsumerWidget {
         ],
       ),
       onTap: () {
-        if (episode.overview == null || episode.overview!.isEmpty) return;
+        final hasOverview =
+            episode.overview != null && episode.overview!.isNotEmpty;
+        final hasGuestStars =
+            episode.guestStars != null && episode.guestStars!.isNotEmpty;
+        if (!hasOverview && !hasGuestStars && episode.rating == null) return;
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
@@ -536,7 +561,36 @@ class _EpisodeTile extends ConsumerWidget {
               'S${episode.seasonNumber}E${episode.episodeNumber}'
               '${episode.title != null ? ' – ${episode.title}' : ''}',
             ),
-            content: Text(episode.overview!),
+            content: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (episode.rating != null && episode.rating! > 0) ...[
+                    Row(
+                      children: [
+                        const Icon(Icons.star,
+                            size: 16, color: Colors.amber),
+                        const SizedBox(width: 4),
+                        Text(episode.rating!.toStringAsFixed(1)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                  ],
+                  if (hasOverview) Text(episode.overview!),
+                  if (hasGuestStars) ...[
+                    const SizedBox(height: 12),
+                    const Text(
+                      'GUEST STARS',
+                      style:
+                          TextStyle(fontSize: 11, color: Colors.white38),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(episode.guestStars!),
+                  ],
+                ],
+              ),
+            ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),

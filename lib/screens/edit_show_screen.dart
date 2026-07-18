@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart' show Value;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -6,6 +7,7 @@ import '../database/database.dart';
 import '../providers/providers.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
+import '../widgets/smart_image.dart';
 
 class _Candidate {
   final String source;
@@ -38,12 +40,13 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
   final _status = TextEditingController();
   final _rating = TextEditingController();
   final _rematchQuery = TextEditingController();
+  final _folderPath = TextEditingController();
+  final _posterPath = TextEditingController();
+  final _backdropPath = TextEditingController();
   bool _loaded = false;
   bool _saving = false;
   bool _searching = false;
   List<_Candidate> _candidates = [];
-  String? _pendingPosterUrl;
-  String? _pendingBackdropUrl;
   int? _pendingTmdbId;
 
   @override
@@ -55,6 +58,9 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
     _status.dispose();
     _rating.dispose();
     _rematchQuery.dispose();
+    _folderPath.dispose();
+    _posterPath.dispose();
+    _backdropPath.dispose();
     super.dispose();
   }
 
@@ -67,10 +73,22 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
     _status.text = show.status ?? '';
     _rating.text = show.rating?.toString() ?? '';
     _rematchQuery.text = show.title;
-    _pendingPosterUrl = show.posterPath;
-    _pendingBackdropUrl = show.backdropPath;
+    _folderPath.text = show.folderPath;
+    _posterPath.text = show.posterPath ?? '';
+    _backdropPath.text = show.backdropPath ?? '';
     _pendingTmdbId = show.tmdbId;
     _loaded = true;
+  }
+
+  Future<void> _browseFolder() async {
+    final path = await FilePicker.platform.getDirectoryPath();
+    if (path != null) setState(() => _folderPath.text = path);
+  }
+
+  Future<void> _browseImageFile(TextEditingController controller) async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.image);
+    final path = result?.files.single.path;
+    if (path != null) setState(() => controller.text = path);
   }
 
   String? _nullIfEmpty(String s) => s.trim().isEmpty ? null : s.trim();
@@ -137,7 +155,8 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
           final totalSeasons = data['totalSeasons'];
           _status.text = (data['Status'] as String?) ??
               (totalSeasons != null ? '$totalSeasons seasons' : '');
-          _pendingPosterUrl = OmdbService.posterUrl(data['Poster'] as String?);
+          _posterPath.text =
+              OmdbService.posterUrl(data['Poster'] as String?) ?? '';
           _pendingTmdbId = null;
         }
       } else {
@@ -153,12 +172,13 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
         _status.text = details['status'] as String? ?? '';
         final rating = (details['vote_average'] as num?)?.toDouble();
         _rating.text = rating?.toString() ?? '';
-        _pendingPosterUrl =
-            TmdbService.imageUrl(details['poster_path'] as String?);
-        _pendingBackdropUrl = TmdbService.imageUrl(
-          details['backdrop_path'] as String?,
-          size: 'w1280',
-        );
+        _posterPath.text =
+            TmdbService.imageUrl(details['poster_path'] as String?) ?? '';
+        _backdropPath.text = TmdbService.imageUrl(
+              details['backdrop_path'] as String?,
+              size: 'w1280',
+            ) ??
+            '';
         _pendingTmdbId = tmdbId;
       }
       if (!mounted) return;
@@ -187,6 +207,12 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
       );
       return;
     }
+    if (_folderPath.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Folder path cannot be empty')),
+      );
+      return;
+    }
     setState(() => _saving = true);
     final db = ref.read(databaseProvider);
     await db.updateShowDetails(
@@ -198,8 +224,9 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
         contentRating: Value(_nullIfEmpty(_contentRating.text)),
         status: Value(_nullIfEmpty(_status.text)),
         rating: Value(double.tryParse(_rating.text.trim())),
-        posterPath: Value(_pendingPosterUrl),
-        backdropPath: Value(_pendingBackdropUrl),
+        folderPath: Value(_folderPath.text.trim()),
+        posterPath: Value(_nullIfEmpty(_posterPath.text)),
+        backdropPath: Value(_nullIfEmpty(_backdropPath.text)),
         tmdbId: Value(_pendingTmdbId),
       ),
     );
@@ -401,6 +428,104 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                 decoration: const InputDecoration(
                   labelText: 'Rating (0-10)',
                   border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Poster & Backdrop',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 60,
+                      height: 90,
+                      child: _posterPath.text.isNotEmpty
+                          ? SmartImage(
+                              path: _posterPath.text,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c) =>
+                                  Container(color: Colors.white10),
+                            )
+                          : Container(color: Colors.white10),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _posterPath,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'Poster (URL or local file)',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          tooltip: 'Browse for image file',
+                          onPressed: () => _browseImageFile(_posterPath),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(6),
+                    child: SizedBox(
+                      width: 90,
+                      height: 50,
+                      child: _backdropPath.text.isNotEmpty
+                          ? SmartImage(
+                              path: _backdropPath.text,
+                              fit: BoxFit.cover,
+                              errorBuilder: (c) =>
+                                  Container(color: Colors.white10),
+                            )
+                          : Container(color: Colors.white10),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: TextField(
+                      controller: _backdropPath,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'Backdrop (URL or local file)',
+                        border: const OutlineInputBorder(),
+                        suffixIcon: IconButton(
+                          icon: const Icon(Icons.folder_open),
+                          tooltip: 'Browse for image file',
+                          onPressed: () => _browseImageFile(_backdropPath),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Files',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _folderPath,
+                decoration: InputDecoration(
+                  labelText: 'Show folder',
+                  helperText: 'The folder containing this show\'s episodes',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: IconButton(
+                    icon: const Icon(Icons.folder_open),
+                    tooltip: 'Browse for folder',
+                    onPressed: _browseFolder,
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

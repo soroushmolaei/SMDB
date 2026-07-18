@@ -1,5 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import 'smart_image.dart';
 
 class PosterCard extends StatelessWidget {
   final String title;
@@ -31,13 +32,11 @@ class PosterCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: posterUrl != null
-                      ? CachedNetworkImage(
-                          imageUrl: posterUrl!,
+                  child: posterUrl != null && posterUrl!.isNotEmpty
+                      ? SmartImage(
+                          path: posterUrl!,
                           fit: BoxFit.cover,
-                          placeholder: (context, url) =>
-                              Container(color: Colors.white10),
-                          errorWidget: (context, url, error) => _fallback(),
+                          errorBuilder: (context) => _fallback(),
                         )
                       : _fallback(),
                 ),

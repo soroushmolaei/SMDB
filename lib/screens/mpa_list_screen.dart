@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
-import '../widgets/poster_card.dart';
+import '../widgets/media_grid.dart';
+import '../widgets/media_item.dart';
 import 'movie_detail_screen.dart';
+import 'show_detail_screen.dart';
 
 class MpaListScreen extends ConsumerWidget {
   const MpaListScreen({super.key});
@@ -11,6 +13,7 @@ class MpaListScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final moviesAsync = ref.watch(moviesStreamProvider);
+    final shows = ref.watch(showsStreamProvider).value ?? [];
 
     return moviesAsync.when(
       data: (movies) {
@@ -20,12 +23,17 @@ class MpaListScreen extends ConsumerWidget {
           if (rating == null || rating.isEmpty) continue;
           counts[rating] = (counts[rating] ?? 0) + 1;
         }
+        for (final s in shows) {
+          final rating = s.contentRating;
+          if (rating == null || rating.isEmpty) continue;
+          counts[rating] = (counts[rating] ?? 0) + 1;
+        }
         final ratings = counts.keys.toList()..sort();
 
         if (ratings.isEmpty) {
           return const Center(
             child: Text(
-              'No content ratings yet — scan a movie folder first.',
+              'No content ratings yet — scan a movie or show folder first.',
               style: TextStyle(color: Colors.white54),
             ),
           );
@@ -82,51 +90,82 @@ class MpaListScreen extends ConsumerWidget {
   }
 }
 
-class MpaMoviesScreen extends ConsumerWidget {
+class MpaMoviesScreen extends ConsumerStatefulWidget {
   final String rating;
   const MpaMoviesScreen({super.key, required this.rating});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MpaMoviesScreen> createState() => _MpaMoviesScreenState();
+}
+
+class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen> {
+  SortOption _sort = SortOption.titleAsc;
+
+  @override
+  Widget build(BuildContext context) {
     final moviesAsync = ref.watch(moviesStreamProvider);
+    final shows = ref.watch(showsStreamProvider).value ?? [];
 
     return Scaffold(
-      appBar: AppBar(title: Text(rating)),
+      appBar: AppBar(title: Text(widget.rating)),
       body: moviesAsync.when(
         data: (movies) {
-          final filtered =
-              movies.where((m) => m.contentRating == rating).toList();
-          if (filtered.isEmpty) {
-            return const Center(
-              child: Text('No movies with this rating',
-                  style: TextStyle(color: Colors.white54)),
-            );
-          }
-          return GridView.builder(
-            padding: const EdgeInsets.all(12),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 150,
-              childAspectRatio: 0.55,
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-            ),
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final movie = filtered[index];
-              return PosterCard(
-                title: movie.title,
-                posterUrl: movie.posterPath,
-                watched: movie.watched,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => MovieDetailScreen(movieId: movie.id),
-                  ),
+          final items = <MediaItem>[
+            ...movies
+                .where((m) => m.contentRating == widget.rating)
+                .map((m) => MediaItem(
+                      kind: 'movie',
+                      id: m.id,
+                      title: m.title,
+                      year: m.year,
+                      posterPath: m.posterPath,
+                      rating: m.rating,
+                      genres: m.genres,
+                      watched: m.watched,
+                      isFavorite: m.isFavorite,
+                      dateAdded: m.dateAdded,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MovieDetailScreen(movieId: m.id),
+                        ),
+                      ),
+                    )),
+            ...shows
+                .where((s) => s.contentRating == widget.rating)
+                .map((s) => MediaItem(
+                      kind: 'show',
+                      id: s.id,
+                      title: s.title,
+                      year: null,
+                      posterPath: s.posterPath,
+                      rating: s.rating,
+                      genres: s.genres,
+                      watched: false,
+                      isFavorite: s.isFavorite,
+                      dateAdded: s.dateAdded,
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ShowDetailScreen(showId: s.id),
+                        ),
+                      ),
+                    )),
+          ];
+          sortMediaItems(items, _sort);
+
+          return Column(
+            children: [
+              SortFilterBar(
+                sort: _sort,
+                onSortChanged: (s) => setState(() => _sort = s),
+              ),
+              Expanded(
+                child: MediaItemView(
+                  items: items,
+                  gridView: true,
+                  emptyTitle: 'No movies or shows with this rating',
                 ),
-                onToggleWatched: () => ref
-                    .read(databaseProvider)
-                    .setMovieWatched(movie.id, !movie.watched),
-              );
-            },
+              ),
+            ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),

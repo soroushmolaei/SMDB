@@ -78,6 +78,8 @@ class Episodes extends Table {
   TextColumn get overview => text().nullable()();
   TextColumn get airDate => text().nullable()();
   TextColumn get stillPath => text().nullable()();
+  RealColumn get rating => real().nullable()();
+  TextColumn get guestStars => text().nullable()(); // comma separated
   TextColumn get filePath => text()();
   BoolColumn get watched => boolean().withDefault(const Constant(false))();
   DateTimeColumn get watchedDate => dateTime().nullable()();
@@ -121,6 +123,28 @@ class AppSettings extends Table {
   Set<Column> get primaryKey => {key};
 }
 
+@DataClassName('Collection')
+class Collections extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get name => text()();
+  DateTimeColumn get dateCreated =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
+@DataClassName('CollectionMovie')
+class CollectionMovies extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get collectionId => integer().references(Collections, #id)();
+  IntColumn get movieId => integer().references(Movies, #id)();
+}
+
+@DataClassName('CollectionShow')
+class CollectionShows extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get collectionId => integer().references(Collections, #id)();
+  IntColumn get showId => integer().references(Shows, #id)();
+}
+
 /// Plain input for [AppDatabase.setMovieCredits] — not a table, just a
 /// transfer object from the scanner/matcher to the database layer.
 class MovieCreditInput {
@@ -150,13 +174,16 @@ class MovieCreditInput {
     People,
     MovieCredits,
     ShowCredits,
+    Collections,
+    CollectionMovies,
+    CollectionShows,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 8;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -192,6 +219,13 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(people, people.biography);
             await m.addColumn(people, people.birthday);
             await m.addColumn(people, people.placeOfBirth);
+          }
+          if (from < 9) {
+            await m.addColumn(episodes, episodes.rating);
+            await m.addColumn(episodes, episodes.guestStars);
+            await m.createTable(collections);
+            await m.createTable(collectionMovies);
+            await m.createTable(collectionShows);
           }
         },
       );
@@ -266,8 +300,11 @@ class AppDatabase extends _$AppDatabase {
   Future<void> updateMovieDetails(int id, MoviesCompanion data) =>
       (update(movies)..where((m) => m.id.equals(id))).write(data);
 
-  Future<void> deleteMovie(int id) =>
-      (delete(movies)..where((m) => m.id.equals(id))).go();
+  Future<void> deleteMovie(int id) async {
+    await (delete(movieCredits)..where((c) => c.movieId.equals(id))).go();
+    await (delete(collectionMovies)..where((c) => c.movieId.equals(id))).go();
+    await (delete(movies)..where((m) => m.id.equals(id))).go();
+  }
 
   // --- People & credits ------------------------------------------------
 
@@ -385,6 +422,8 @@ class AppDatabase extends _$AppDatabase {
             ]))
           .watch();
 
+  Stream<List<Episode>> watchAllEpisodes() => select(episodes).watch();
+
   Future<List<Episode>> getEpisodesForShowOnce(int showId) =>
       (select(episodes)..where((e) => e.showId.equals(showId))).get();
 
@@ -412,8 +451,8 @@ class AppDatabase extends _$AppDatabase {
       );
 
   /// Fills in rich per-episode metadata found after the initial file scan
-  /// (title, overview, air date, thumbnail), matched by season/episode
-  /// number within a show.
+  /// (title, overview, air date, thumbnail, rating, guest stars), matched
+  /// by season/episode number within a show.
   Future<void> updateEpisodeMetadata(
     int showId,
     int seasonNumber,
@@ -422,6 +461,8 @@ class AppDatabase extends _$AppDatabase {
     String? overview,
     String? airDate,
     String? stillPath,
+    double? rating,
+    String? guestStars,
   }) async {
     await (update(episodes)
           ..where((e) =>
@@ -433,6 +474,8 @@ class AppDatabase extends _$AppDatabase {
       overview: Value(overview),
       airDate: Value(airDate),
       stillPath: Value(stillPath),
+      rating: Value(rating),
+      guestStars: Value(guestStars),
     ));
   }
 
@@ -444,6 +487,7 @@ class AppDatabase extends _$AppDatabase {
   Future<void> deleteShow(int id) async {
     await (delete(episodes)..where((e) => e.showId.equals(id))).go();
     await (delete(showCredits)..where((c) => c.showId.equals(id))).go();
+    await (delete(collectionShows)..where((c) => c.showId.equals(id))).go();
     await (delete(shows)..where((s) => s.id.equals(id))).go();
   }
 
@@ -471,6 +515,94 @@ class AppDatabase extends _$AppDatabase {
       ));
     }
   }
+
+  // --- Collections (custom groups) -----------------------------------------
+
+  Stream<List<Collection>> watchAllCollections() =>
+      (select(collections)
+            ..orderBy([(c) => OrderingTerm(expression: c.name)]))
+          .watch();
+
+  Future<int> createCollection(String name) => into(collections).insert(
+        CollectionsCompanion.insert(name: name.trim()),
+      );
+
+  Future<void> renameCollection(int id, String name) =>
+      (update(collections)..where((c) => c.id.equals(id)))
+          .write(CollectionsCompanion(name: Value(name.trim())));
+
+  Future<void> deleteCollection(int id) async {
+    await (delete(collectionMovies)..where((c) => c.collectionId.equals(id)))
+        .go();
+    await (delete(collectionShows)..where((c) => c.collectionId.equals(id)))
+        .go();
+    await (delete(collections)..where((c) => c.id.equals(id))).go();
+  }
+
+  Stream<List<CollectionMovie>> watchCollectionMovieLinks(int collectionId) =>
+      (select(collectionMovies)
+            ..where((c) => c.collectionId.equals(collectionId)))
+          .watch();
+
+  Stream<List<CollectionShow>> watchCollectionShowLinks(int collectionId) =>
+      (select(collectionShows)
+            ..where((c) => c.collectionId.equals(collectionId)))
+          .watch();
+
+  Future<bool> isMovieInCollection(int collectionId, int movieId) async {
+    final row = await (select(collectionMovies)
+          ..where((c) =>
+              c.collectionId.equals(collectionId) &
+              c.movieId.equals(movieId)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<void> addMovieToCollection(int collectionId, int movieId) async {
+    final exists = await isMovieInCollection(collectionId, movieId);
+    if (exists) return;
+    await into(collectionMovies).insert(
+      CollectionMoviesCompanion.insert(
+        collectionId: collectionId,
+        movieId: movieId,
+      ),
+    );
+  }
+
+  Future<void> removeMovieFromCollection(
+    int collectionId,
+    int movieId,
+  ) =>
+      (delete(collectionMovies)
+            ..where((c) =>
+                c.collectionId.equals(collectionId) &
+                c.movieId.equals(movieId)))
+          .go();
+
+  Future<bool> isShowInCollection(int collectionId, int showId) async {
+    final row = await (select(collectionShows)
+          ..where((c) =>
+              c.collectionId.equals(collectionId) & c.showId.equals(showId)))
+        .getSingleOrNull();
+    return row != null;
+  }
+
+  Future<void> addShowToCollection(int collectionId, int showId) async {
+    final exists = await isShowInCollection(collectionId, showId);
+    if (exists) return;
+    await into(collectionShows).insert(
+      CollectionShowsCompanion.insert(
+        collectionId: collectionId,
+        showId: showId,
+      ),
+    );
+  }
+
+  Future<void> removeShowFromCollection(int collectionId, int showId) =>
+      (delete(collectionShows)
+            ..where((c) =>
+                c.collectionId.equals(collectionId) & c.showId.equals(showId)))
+          .go();
 
   // --- Settings ------------------------------------------------------------
 

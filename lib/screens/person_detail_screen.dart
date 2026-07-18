@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../services/tmdb_service.dart';
+import '../widgets/fullscreen_image_viewer.dart';
 import 'movie_detail_screen.dart';
+import 'show_detail_screen.dart';
 
 class PersonDetailScreen extends ConsumerStatefulWidget {
   final int personId;
@@ -56,21 +58,21 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
     }
   }
 
-  String _roleLabel(MovieCredit credit) {
-    if (credit.role == 'actor' &&
-        credit.character != null &&
-        credit.character!.isNotEmpty) {
-      return 'as ${credit.character}';
+  String _roleLabel(String role, String? character) {
+    if (role == 'actor' && character != null && character.isNotEmpty) {
+      return 'as $character';
     }
-    if (credit.role.isEmpty) return '';
-    return credit.role[0].toUpperCase() + credit.role.substring(1);
+    if (role.isEmpty) return '';
+    return role[0].toUpperCase() + role.substring(1);
   }
 
   @override
   Widget build(BuildContext context) {
     final peopleAsync = ref.watch(peopleStreamProvider);
-    final creditsAsync = ref.watch(allCreditsStreamProvider);
+    final movieCreditsAsync = ref.watch(allCreditsStreamProvider);
+    final showCreditsAsync = ref.watch(allShowCreditsStreamProvider);
     final moviesAsync = ref.watch(moviesStreamProvider);
+    final showsAsync = ref.watch(showsStreamProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Person')),
@@ -84,142 +86,211 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
           final person = personMatches.first;
           _maybeFetchBio(person);
 
-          return creditsAsync.when(
-            data: (allCredits) {
-              final myCredits = allCredits
-                  .where((c) => c.personId == widget.personId)
-                  .toList();
+          return movieCreditsAsync.when(
+            data: (allMovieCredits) => showCreditsAsync.when(
+              data: (allShowCredits) => moviesAsync.when(
+                data: (movies) => showsAsync.when(
+                  data: (shows) {
+                    final movieById = {for (final m in movies) m.id: m};
+                    final showById = {for (final s in shows) s.id: s};
 
-              return moviesAsync.when(
-                data: (movies) {
-                  final movieById = {for (final m in movies) m.id: m};
-                  return ListView(
-                    padding: const EdgeInsets.all(16),
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          CircleAvatar(
-                            radius: 40,
-                            backgroundColor: Colors.white10,
-                            backgroundImage: person.photoPath != null
-                                ? CachedNetworkImageProvider(
-                                    person.photoPath!)
-                                : null,
-                            child: person.photoPath == null
-                                ? const Icon(Icons.person,
-                                    size: 40, color: Colors.white38)
-                                : null,
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  person.name,
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                if (person.birthday != null ||
-                                    person.placeOfBirth != null)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 4),
-                                    child: Text(
-                                      [
-                                        if (person.birthday != null)
-                                          'Born ${person.birthday}',
-                                        if (person.placeOfBirth != null)
-                                          person.placeOfBirth!,
-                                      ].join(' • '),
-                                      style: const TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 13),
-                                    ),
-                                  ),
-                                if (_fetching)
-                                  const Padding(
-                                    padding: EdgeInsets.only(top: 6),
-                                    child: SizedBox(
-                                      width: 14,
-                                      height: 14,
-                                      child: CircularProgressIndicator(
-                                          strokeWidth: 2),
-                                    ),
-                                  ),
-                              ],
+                    // Only keep credits whose movie/show still exists —
+                    // otherwise a deleted title leaves a stale credit row
+                    // that would inflate the count below.
+                    final myMovieCredits = allMovieCredits
+                        .where((c) =>
+                            c.personId == widget.personId &&
+                            movieById.containsKey(c.movieId))
+                        .toList();
+                    final myShowCredits = allShowCredits
+                        .where((c) =>
+                            c.personId == widget.personId &&
+                            showById.containsKey(c.showId))
+                        .toList();
+                    final totalCredits =
+                        myMovieCredits.length + myShowCredits.length;
+
+                    return ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            GestureDetector(
+                              onTap: person.photoPath == null
+                                  ? null
+                                  : () => FullscreenImageViewer.show(
+                                        context,
+                                        person.photoPath,
+                                      ),
+                              child: CircleAvatar(
+                                radius: 40,
+                                backgroundColor: Colors.white10,
+                                backgroundImage: person.photoPath != null
+                                    ? CachedNetworkImageProvider(
+                                        person.photoPath!)
+                                    : null,
+                                child: person.photoPath == null
+                                    ? const Icon(Icons.person,
+                                        size: 40, color: Colors.white38)
+                                    : null,
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
-                      if (person.biography != null) ...[
-                        const SizedBox(height: 16),
-                        Text(
-                          person.biography!,
-                          style: const TextStyle(height: 1.4),
-                        ),
-                      ],
-                      const SizedBox(height: 24),
-                      Text(
-                        'Filmography (${myCredits.length})',
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      if (myCredits.isEmpty)
-                        const Text(
-                          'No linked movies.',
-                          style: TextStyle(color: Colors.white54),
-                        ),
-                      ...myCredits.map((credit) {
-                        final movie = movieById[credit.movieId];
-                        if (movie == null) return const SizedBox.shrink();
-                        return ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: SizedBox(
-                            width: 40,
-                            height: 56,
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: movie.posterPath != null
-                                  ? CachedNetworkImage(
-                                      imageUrl: movie.posterPath!,
-                                      fit: BoxFit.cover,
-                                      errorWidget: (c, u, e) =>
-                                          Container(color: Colors.white10),
-                                    )
-                                  : Container(
-                                      color: Colors.white10,
-                                      child: const Icon(
-                                        Icons.movie_outlined,
-                                        color: Colors.white24,
-                                        size: 18,
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    person.name,
+                                    style: const TextStyle(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  if (person.birthday != null ||
+                                      person.placeOfBirth != null)
+                                    Padding(
+                                      padding:
+                                          const EdgeInsets.only(top: 4),
+                                      child: Text(
+                                        [
+                                          if (person.birthday != null)
+                                            'Born ${person.birthday}',
+                                          if (person.placeOfBirth != null)
+                                            person.placeOfBirth!,
+                                        ].join(' • '),
+                                        style: const TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 13),
                                       ),
                                     ),
+                                  if (_fetching)
+                                    const Padding(
+                                      padding: EdgeInsets.only(top: 6),
+                                      child: SizedBox(
+                                        width: 14,
+                                        height: 14,
+                                        child: CircularProgressIndicator(
+                                            strokeWidth: 2),
+                                      ),
+                                    ),
+                                ],
+                              ),
                             ),
+                          ],
+                        ),
+                        if (person.biography != null) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            person.biography!,
+                            style: const TextStyle(height: 1.4),
                           ),
-                          title: Text(movie.title),
-                          subtitle: Text(_roleLabel(credit)),
-                          onTap: () => Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  MovieDetailScreen(movieId: movie.id),
+                        ],
+                        const SizedBox(height: 24),
+                        Text(
+                          'Filmography ($totalCredits)',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        if (totalCredits == 0)
+                          const Text(
+                            'No linked movies or shows.',
+                            style: TextStyle(color: Colors.white54),
+                          ),
+                        ...myMovieCredits.map((credit) {
+                          final movie = movieById[credit.movieId]!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: SizedBox(
+                              width: 40,
+                              height: 56,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: movie.posterPath != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: movie.posterPath!,
+                                        fit: BoxFit.cover,
+                                        errorWidget: (c, u, e) => Container(
+                                            color: Colors.white10),
+                                      )
+                                    : Container(
+                                        color: Colors.white10,
+                                        child: const Icon(
+                                          Icons.movie_outlined,
+                                          color: Colors.white24,
+                                          size: 18,
+                                        ),
+                                      ),
+                              ),
                             ),
-                          ),
-                        );
-                      }),
-                    ],
-                  );
-                },
+                            title: Text(movie.title),
+                            subtitle:
+                                Text(_roleLabel(credit.role, credit.character)),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    MovieDetailScreen(movieId: movie.id),
+                              ),
+                            ),
+                          );
+                        }),
+                        ...myShowCredits.map((credit) {
+                          final show = showById[credit.showId]!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: SizedBox(
+                              width: 40,
+                              height: 56,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: show.posterPath != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: show.posterPath!,
+                                        fit: BoxFit.cover,
+                                        errorWidget: (c, u, e) => Container(
+                                            color: Colors.white10),
+                                      )
+                                    : Container(
+                                        color: Colors.white10,
+                                        child: const Icon(
+                                          Icons.tv_outlined,
+                                          color: Colors.white24,
+                                          size: 18,
+                                        ),
+                                      ),
+                              ),
+                            ),
+                            title: Text(show.title),
+                            subtitle:
+                                Text(_roleLabel(credit.role, credit.character)),
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ShowDetailScreen(showId: show.id),
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+                    );
+                  },
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
+                  error: (e, st) => Center(child: Text('Error: $e')),
+                ),
                 loading: () =>
                     const Center(child: CircularProgressIndicator()),
                 error: (e, st) => Center(child: Text('Error: $e')),
-              );
-            },
+              ),
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Center(child: Text('Error: $e')),
+            ),
             loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, st) => Center(child: Text('Error: $e')),
           );

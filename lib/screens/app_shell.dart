@@ -2,9 +2,12 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../database/database.dart';
 import '../providers/providers.dart';
-import '../widgets/poster_card.dart';
+import '../widgets/media_grid.dart';
+import '../widgets/media_item.dart';
 import 'genres_list_screen.dart';
+import 'group_detail_screen.dart';
 import 'movie_detail_screen.dart';
 import 'mpa_list_screen.dart';
 import 'people_tab.dart';
@@ -23,6 +26,10 @@ enum _Section {
   watched,
 }
 
+enum _ContentMode { moviesOnly, showsOnly, combined }
+
+enum _CombinedFilter { none, favorites, watched, notWatched }
+
 class AppShell extends ConsumerStatefulWidget {
   const AppShell({super.key});
 
@@ -35,6 +42,10 @@ class _AppShellState extends ConsumerState<AppShell> {
   String _query = '';
   bool _gridView = true;
   String? _letterFilter;
+  SortOption _sort = SortOption.titleAsc;
+  String? _selectedGenre;
+  int? _selectedYear;
+  double? _minRating;
 
   String get _title {
     switch (_section) {
@@ -59,10 +70,20 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
-  bool get _showsLetterIndex => _section != _Section.shows &&
-      _section != _Section.people &&
-      _section != _Section.genres &&
-      _section != _Section.mpa;
+  bool get _isLibrarySection =>
+      _section == _Section.movies ||
+      _section == _Section.shows ||
+      _section == _Section.latestAdditions ||
+      _section == _Section.favorites ||
+      _section == _Section.notYetWatched ||
+      _section == _Section.watched;
+
+  void _resetFiltersOnNav() {
+    _letterFilter = null;
+    _selectedGenre = null;
+    _selectedYear = null;
+    _minRating = null;
+  }
 
   Future<void> _addAndScanFolder(String type) async {
     final selected = await FilePicker.platform.getDirectoryPath(
@@ -82,11 +103,47 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
+  Future<void> _createGroup() async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('New group'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'Group name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(controller.text),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.trim().isNotEmpty) {
+      final id = await ref.read(databaseProvider).createCollection(name);
+      if (mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => GroupDetailScreen(collectionId: id),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final scanState = ref.watch(scanControllerProvider);
     final omdbConfigured = ref.watch(omdbServiceProvider) != null;
     final tmdbConfigured = ref.watch(tmdbServiceProvider) != null;
+    final collections = ref.watch(collectionsStreamProvider).value ?? [];
 
     return Scaffold(
       body: Row(
@@ -96,11 +153,18 @@ class _AppShellState extends ConsumerState<AppShell> {
             selected: _section,
             onSelect: (s) => setState(() {
               _section = s;
-              _letterFilter = null;
+              _resetFiltersOnNav();
             }),
             onSettings: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ),
+            collections: collections,
+            onGroupTap: (id) => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => GroupDetailScreen(collectionId: id),
+              ),
+            ),
+            onNewGroup: _createGroup,
           ),
           const VerticalDivider(width: 1, color: Colors.white12),
           Expanded(
@@ -137,7 +201,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      if (_showsLetterIndex)
+                      if (_isLibrarySection)
                         _AlphabetIndex(
                           selected: _letterFilter,
                           onSelect: (l) =>
@@ -158,13 +222,41 @@ class _AppShellState extends ConsumerState<AppShell> {
   Widget _buildContent() {
     switch (_section) {
       case _Section.movies:
-        return _MoviesGrid(
+        return _LibrarySection(
+          mode: _ContentMode.moviesOnly,
+          combinedFilter: _CombinedFilter.none,
           query: _query,
           letter: _letterFilter,
           gridView: _gridView,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: _selectedYear,
+          onYearChanged: (y) => setState(() => _selectedYear = y),
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'No movies yet',
+          emptySubtitle: 'Tap Add Movies above to scan a folder.',
         );
       case _Section.shows:
-        return _ShowsGrid(query: _query, gridView: _gridView);
+        return _LibrarySection(
+          mode: _ContentMode.showsOnly,
+          combinedFilter: _CombinedFilter.none,
+          query: _query,
+          letter: _letterFilter,
+          gridView: _gridView,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: null,
+          onYearChanged: null,
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'No shows yet',
+          emptySubtitle: 'Tap Add Shows above to scan a folder.',
+        );
       case _Section.people:
         return const PeopleTab();
       case _Section.genres:
@@ -172,32 +264,76 @@ class _AppShellState extends ConsumerState<AppShell> {
       case _Section.mpa:
         return const MpaListScreen();
       case _Section.latestAdditions:
-        return _MoviesGrid(
+        return _LibrarySection(
+          mode: _ContentMode.combined,
+          combinedFilter: _CombinedFilter.none,
           query: _query,
           letter: _letterFilter,
           gridView: _gridView,
-          sortByDateAdded: true,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: _selectedYear,
+          onYearChanged: (y) => setState(() => _selectedYear = y),
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'Nothing added yet',
+          emptySubtitle: '',
         );
       case _Section.favorites:
-        return _MoviesGrid(
+        return _LibrarySection(
+          mode: _ContentMode.combined,
+          combinedFilter: _CombinedFilter.favorites,
           query: _query,
           letter: _letterFilter,
           gridView: _gridView,
-          onlyFavorites: true,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: _selectedYear,
+          onYearChanged: (y) => setState(() => _selectedYear = y),
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'No favorites yet',
+          emptySubtitle: 'Tap the star on a movie or show to add it here.',
         );
       case _Section.notYetWatched:
-        return _MoviesGrid(
+        return _LibrarySection(
+          mode: _ContentMode.combined,
+          combinedFilter: _CombinedFilter.notWatched,
           query: _query,
           letter: _letterFilter,
           gridView: _gridView,
-          onlyUnwatched: true,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: _selectedYear,
+          onYearChanged: (y) => setState(() => _selectedYear = y),
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'Everything is watched',
+          emptySubtitle: '',
         );
       case _Section.watched:
-        return _MoviesGrid(
+        return _LibrarySection(
+          mode: _ContentMode.combined,
+          combinedFilter: _CombinedFilter.watched,
           query: _query,
           letter: _letterFilter,
           gridView: _gridView,
-          onlyWatched: true,
+          sort: _sort,
+          onSortChanged: (s) => setState(() => _sort = s),
+          selectedGenre: _selectedGenre,
+          onGenreChanged: (g) => setState(() => _selectedGenre = g),
+          selectedYear: _selectedYear,
+          onYearChanged: (y) => setState(() => _selectedYear = y),
+          minRating: _minRating,
+          onMinRatingChanged: (r) => setState(() => _minRating = r),
+          emptyTitle: 'Nothing watched yet',
+          emptySubtitle: '',
         );
     }
   }
@@ -211,11 +347,17 @@ class _Sidebar extends StatelessWidget {
   final _Section selected;
   final ValueChanged<_Section> onSelect;
   final VoidCallback onSettings;
+  final List<Collection> collections;
+  final ValueChanged<int> onGroupTap;
+  final VoidCallback onNewGroup;
 
   const _Sidebar({
     required this.selected,
     required this.onSelect,
     required this.onSettings,
+    required this.collections,
+    required this.onGroupTap,
+    required this.onNewGroup,
   });
 
   @override
@@ -309,6 +451,49 @@ class _Sidebar extends StatelessWidget {
                   selected: selected == _Section.watched,
                   onTap: () => onSelect(_Section.watched),
                 ),
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 10, 8, 4),
+                  child: Row(
+                    children: [
+                      const Expanded(
+                        child: Text(
+                          'MY GROUPS',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: Colors.white38,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.add, size: 16),
+                        tooltip: 'New group',
+                        onPressed: onNewGroup,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                            minWidth: 28, minHeight: 28),
+                      ),
+                    ],
+                  ),
+                ),
+                if (collections.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(14, 0, 14, 8),
+                    child: Text(
+                      'No groups yet',
+                      style: TextStyle(fontSize: 12, color: Colors.white38),
+                    ),
+                  ),
+                ...collections.map(
+                  (c) => _NavItem(
+                    icon: Icons.folder_outlined,
+                    label: c.name,
+                    selected: false,
+                    onTap: () => onGroupTap(c.id),
+                  ),
+                ),
               ],
             ),
           ),
@@ -366,12 +551,17 @@ class _NavItem extends StatelessWidget {
                   size: 18,
                   color: selected ? const Color(0xFF9C91F5) : Colors.white60),
               const SizedBox(width: 10),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: selected ? Colors.white : Colors.white70,
-                  fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: selected ? Colors.white : Colors.white70,
+                    fontWeight:
+                        selected ? FontWeight.w600 : FontWeight.normal,
+                  ),
                 ),
               ),
             ],
@@ -525,182 +715,199 @@ class _AlphabetIndex extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// Movies grid (shared by Movies / Latest Additions / Favorites / Watched /
-// Not yet Watched)
+// Unified library section: movies-only, shows-only, or combined, with
+// search, letter index, genre/year/rating filters, and sort — all sharing
+// one implementation via MediaItem.
 // ---------------------------------------------------------------------------
 
-class _MoviesGrid extends ConsumerWidget {
+class _LibrarySection extends ConsumerWidget {
+  final _ContentMode mode;
+  final _CombinedFilter combinedFilter;
   final String query;
   final String? letter;
   final bool gridView;
-  final bool sortByDateAdded;
-  final bool onlyFavorites;
-  final bool onlyWatched;
-  final bool onlyUnwatched;
+  final SortOption sort;
+  final ValueChanged<SortOption> onSortChanged;
+  final String? selectedGenre;
+  final ValueChanged<String?> onGenreChanged;
+  final int? selectedYear;
+  final ValueChanged<int?>? onYearChanged;
+  final double? minRating;
+  final ValueChanged<double?> onMinRatingChanged;
+  final String emptyTitle;
+  final String emptySubtitle;
 
-  const _MoviesGrid({
+  const _LibrarySection({
+    required this.mode,
+    required this.combinedFilter,
     required this.query,
     required this.letter,
     required this.gridView,
-    this.sortByDateAdded = false,
-    this.onlyFavorites = false,
-    this.onlyWatched = false,
-    this.onlyUnwatched = false,
+    required this.sort,
+    required this.onSortChanged,
+    required this.selectedGenre,
+    required this.onGenreChanged,
+    required this.selectedYear,
+    required this.onYearChanged,
+    required this.minRating,
+    required this.onMinRatingChanged,
+    required this.emptyTitle,
+    required this.emptySubtitle,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final moviesAsync = ref.watch(moviesStreamProvider);
+    final needsShows =
+        mode == _ContentMode.showsOnly || mode == _ContentMode.combined;
+    final List<Show> shows = needsShows
+        ? (ref.watch(showsStreamProvider).value ?? const <Show>[])
+        : const <Show>[];
+    final needsEpisodes =
+        needsShows && combinedFilter != _CombinedFilter.none;
+    final List<Episode> episodes = needsEpisodes
+        ? (ref.watch(allEpisodesStreamProvider).value ?? const <Episode>[])
+        : const <Episode>[];
+
     return moviesAsync.when(
       data: (movies) {
-        var filtered = movies.where((m) {
-          if (query.isNotEmpty) {
-            final haystack = [
-              m.title,
-              m.castNames ?? '',
-              m.director ?? '',
-              m.writer ?? '',
-              m.genres ?? '',
-            ].join(' ').toLowerCase();
-            if (!haystack.contains(query)) return false;
+        final items = <MediaItem>[];
+
+        if (mode == _ContentMode.moviesOnly || mode == _ContentMode.combined) {
+          for (final m in movies) {
+            items.add(MediaItem(
+              kind: 'movie',
+              id: m.id,
+              title: m.title,
+              year: m.year,
+              posterPath: m.posterPath,
+              rating: m.rating,
+              genres: m.genres,
+              watched: m.watched,
+              isFavorite: m.isFavorite,
+              dateAdded: m.dateAdded,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => MovieDetailScreen(movieId: m.id),
+                ),
+              ),
+            ));
+          }
+        }
+
+        if (needsShows) {
+          for (final s in shows) {
+            bool showWatched = false;
+            if (needsEpisodes) {
+              final showEpisodes =
+                  episodes.where((e) => e.showId == s.id).toList();
+              if (showEpisodes.isNotEmpty) {
+                showWatched = showEpisodes.every((e) => e.watched);
+              }
+            }
+            items.add(MediaItem(
+              kind: 'show',
+              id: s.id,
+              title: s.title,
+              year: null,
+              posterPath: s.posterPath,
+              rating: s.rating,
+              genres: s.genres,
+              watched: showWatched,
+              isFavorite: s.isFavorite,
+              dateAdded: s.dateAdded,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ShowDetailScreen(showId: s.id),
+                ),
+              ),
+            ));
+          }
+        }
+
+        var filtered = items.where((item) {
+          if (query.isNotEmpty &&
+              !item.title.toLowerCase().contains(query)) {
+            return false;
           }
           if (letter != null) {
-            final first = m.title.isEmpty ? '#' : m.title[0].toLowerCase();
+            final first =
+                item.title.isEmpty ? '#' : item.title[0].toLowerCase();
             if (letter == '#') {
               if (RegExp(r'[a-z]').hasMatch(first)) return false;
             } else if (first != letter) {
               return false;
             }
           }
-          if (onlyFavorites && !m.isFavorite) return false;
-          if (onlyWatched && !m.watched) return false;
-          if (onlyUnwatched && m.watched) return false;
+          if (selectedGenre != null) {
+            final genres =
+                (item.genres ?? '').split(',').map((g) => g.trim());
+            if (!genres.contains(selectedGenre)) return false;
+          }
+          if (selectedYear != null && item.year != selectedYear) {
+            return false;
+          }
+          if (minRating != null &&
+              (item.rating == null || item.rating! < minRating!)) {
+            return false;
+          }
+          switch (combinedFilter) {
+            case _CombinedFilter.favorites:
+              if (!item.isFavorite) return false;
+              break;
+            case _CombinedFilter.watched:
+              if (!item.watched) return false;
+              break;
+            case _CombinedFilter.notWatched:
+              if (item.watched) return false;
+              break;
+            case _CombinedFilter.none:
+              break;
+          }
           return true;
         }).toList();
 
-        if (sortByDateAdded) {
-          filtered.sort((a, b) => b.dateAdded.compareTo(a.dateAdded));
-        } else {
-          filtered.sort((a, b) => a.title.compareTo(b.title));
-        }
+        sortMediaItems(filtered, sort);
 
-        if (filtered.isEmpty) {
-          return const Center(
-            child: Text('No movies here yet',
-                style: TextStyle(color: Colors.white54)),
-          );
+        final genreSet = <String>{};
+        final yearSet = <int>{};
+        for (final item in items) {
+          if (item.genres != null) {
+            for (final g in item.genres!.split(',')) {
+              final t = g.trim();
+              if (t.isNotEmpty) genreSet.add(t);
+            }
+          }
+          if (item.year != null) yearSet.add(item.year!);
         }
+        final genreList = genreSet.toList()..sort();
+        final yearList = yearSet.toList()..sort((a, b) => b.compareTo(a));
 
-        if (!gridView) {
-          return ListView.builder(
-            itemCount: filtered.length,
-            itemBuilder: (context, index) {
-              final movie = filtered[index];
-              return ListTile(
-                leading: SizedBox(
-                  width: 40,
-                  child: movie.posterPath != null
-                      ? Image.network(movie.posterPath!, fit: BoxFit.cover)
-                      : const Icon(Icons.movie_outlined),
-                ),
-                title: Text(movie.title),
-                subtitle: Text([
-                  if (movie.year != null) '${movie.year}',
-                  if (movie.genres != null) movie.genres!,
-                ].join(' • ')),
-                trailing: movie.rating != null
-                    ? Text(movie.rating!.toStringAsFixed(1))
-                    : null,
-                onTap: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => MovieDetailScreen(movieId: movie.id),
-                  ),
-                ),
-              );
-            },
-          );
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 150,
-            childAspectRatio: 0.55,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: filtered.length,
-          itemBuilder: (context, index) {
-            final movie = filtered[index];
-            return PosterCard(
-              title: movie.title,
-              posterUrl: movie.posterPath,
-              watched: movie.watched,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => MovieDetailScreen(movieId: movie.id),
-                ),
+        return Column(
+          children: [
+            SortFilterBar(
+              sort: sort,
+              onSortChanged: onSortChanged,
+              selectedGenre: selectedGenre,
+              availableGenres: genreList,
+              onGenreChanged: onGenreChanged,
+              selectedYear: selectedYear,
+              availableYears: yearList,
+              onYearChanged: onYearChanged,
+              minRating: minRating,
+              onMinRatingChanged: onMinRatingChanged,
+            ),
+            Expanded(
+              child: MediaItemView(
+                items: filtered,
+                gridView: gridView,
+                emptyTitle: items.isEmpty ? emptyTitle : 'No matches',
+                emptySubtitle: items.isEmpty
+                    ? emptySubtitle
+                    : 'Try a different search or clear filters.',
               ),
-              onToggleWatched: () => ref
-                  .read(databaseProvider)
-                  .setMovieWatched(movie.id, !movie.watched),
-            );
-          },
-        );
-      },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (e, st) => Center(child: Text('Error: $e')),
-    );
-  }
-}
-
-class _ShowsGrid extends ConsumerWidget {
-  final String query;
-  final bool gridView;
-  const _ShowsGrid({required this.query, required this.gridView});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final showsAsync = ref.watch(showsStreamProvider);
-    return showsAsync.when(
-      data: (shows) {
-        final filtered = (query.isEmpty
-            ? shows
-            : shows.where((s) {
-                final haystack = '${s.title} ${s.genres ?? ''}'.toLowerCase();
-                return haystack.contains(query);
-              }).toList())
-          ..sort((a, b) => a.title.compareTo(b.title));
-
-        if (filtered.isEmpty) {
-          return const Center(
-            child: Text('No shows here yet',
-                style: TextStyle(color: Colors.white54)),
-          );
-        }
-
-        return GridView.builder(
-          padding: const EdgeInsets.all(12),
-          gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-            maxCrossAxisExtent: 150,
-            childAspectRatio: 0.55,
-            crossAxisSpacing: 12,
-            mainAxisSpacing: 12,
-          ),
-          itemCount: filtered.length,
-          itemBuilder: (context, index) {
-            final show = filtered[index];
-            return PosterCard(
-              title: show.title,
-              posterUrl: show.posterPath,
-              watched: false,
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => ShowDetailScreen(showId: show.id),
-                ),
-              ),
-            );
-          },
+            ),
+          ],
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),

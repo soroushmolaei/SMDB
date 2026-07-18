@@ -40,6 +40,24 @@ final allShowCreditsStreamProvider = StreamProvider<List<ShowCredit>>((ref) {
   return ref.watch(databaseProvider).watchAllShowCredits();
 });
 
+final collectionsStreamProvider = StreamProvider<List<Collection>>((ref) {
+  return ref.watch(databaseProvider).watchAllCollections();
+});
+
+final allEpisodesStreamProvider = StreamProvider<List<Episode>>((ref) {
+  return ref.watch(databaseProvider).watchAllEpisodes();
+});
+
+final collectionMovieLinksProvider =
+    StreamProvider.family<List<CollectionMovie>, int>((ref, collectionId) {
+  return ref.watch(databaseProvider).watchCollectionMovieLinks(collectionId);
+});
+
+final collectionShowLinksProvider =
+    StreamProvider.family<List<CollectionShow>, int>((ref, collectionId) {
+  return ref.watch(databaseProvider).watchCollectionShowLinks(collectionId);
+});
+
 final episodesForShowProvider =
     StreamProvider.family<List<Episode>, int>((ref, showId) {
   return ref.watch(databaseProvider).watchEpisodesForShow(showId);
@@ -813,6 +831,11 @@ class ScanController extends StateNotifier<ScanState> {
                 ep['still_path'] as String?,
                 size: 'w300',
               ),
+              rating: (ep['vote_average'] as num?)?.toDouble(),
+              guestStars: ((ep['guest_stars'] as List<dynamic>?) ?? [])
+                  .take(10)
+                  .map((g) => g['name'])
+                  .join(', '),
             );
           }
           gotFromTmdb = episodesList.isNotEmpty;
@@ -836,6 +859,7 @@ class ScanController extends StateNotifier<ScanState> {
               epNum,
               title: OmdbService.cleanText(ep['Title'] as String?),
               airDate: OmdbService.cleanText(ep['Released'] as String?),
+              rating: OmdbService.parseRating(ep['imdbRating'] as String?),
             );
           }
         } catch (_) {

@@ -1,5 +1,6 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+
+import 'smart_image.dart';
 
 class FullscreenImageViewer extends StatelessWidget {
   final String imageUrl;
@@ -36,10 +37,10 @@ class FullscreenImageViewer extends StatelessWidget {
           child: InteractiveViewer(
             minScale: 0.5,
             maxScale: 4,
-            child: CachedNetworkImage(
-              imageUrl: imageUrl,
+            child: SmartImage(
+              path: imageUrl,
               fit: BoxFit.contain,
-              errorWidget: (c, u, e) => const Icon(
+              errorBuilder: (context) => const Icon(
                 Icons.broken_image_outlined,
                 color: Colors.white38,
                 size: 48,

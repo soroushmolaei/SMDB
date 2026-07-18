@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/providers.dart';
 import '../widgets/fullscreen_image_viewer.dart';
+import '../widgets/smart_image.dart';
+import 'add_to_group_dialog.dart';
 import 'edit_movie_screen.dart';
 import 'genre_movies_screen.dart';
 import 'person_detail_screen.dart';
@@ -125,10 +127,10 @@ class MovieDetailScreen extends ConsumerWidget {
                       backdropUrl ?? posterUrl,
                     ),
                     child: backdropUrl != null
-                        ? CachedNetworkImage(
-                            imageUrl: backdropUrl,
+                        ? SmartImage(
+                            path: backdropUrl,
                             fit: BoxFit.cover,
-                            errorWidget: (c, u, e) =>
+                            errorBuilder: (c) =>
                                 Container(color: Colors.black26),
                           )
                         : Container(color: Colors.black26),
@@ -150,10 +152,7 @@ class MovieDetailScreen extends ConsumerWidget {
                             width: 110,
                             height: 165,
                             child: posterUrl != null
-                                ? CachedNetworkImage(
-                                    imageUrl: posterUrl,
-                                    fit: BoxFit.cover,
-                                  )
+                                ? SmartImage(path: posterUrl, fit: BoxFit.cover)
                                 : Container(color: Colors.white10),
                           ),
                         ),
@@ -278,6 +277,17 @@ class MovieDetailScreen extends ConsumerWidget {
                                       mode: LaunchMode.externalApplication,
                                     ),
                                   ),
+                                IconButton(
+                                  icon: const Icon(
+                                      Icons.playlist_add_outlined),
+                                  tooltip: 'Add to group',
+                                  onPressed: () => showAddToGroupDialog(
+                                    context,
+                                    ref,
+                                    kind: 'movie',
+                                    itemId: movie.id,
+                                  ),
+                                ),
                               ],
                             ),
                           ],
