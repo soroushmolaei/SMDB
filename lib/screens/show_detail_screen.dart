@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
+import '../widgets/awards_section.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/smart_image.dart';
 import 'add_to_group_dialog.dart';
@@ -295,6 +296,13 @@ class ShowDetailScreen extends ConsumerWidget {
                     peopleById: peopleById,
                   ),
                 ),
+              SliverToBoxAdapter(
+                child: AwardsSection(
+                  itemType: 'show',
+                  itemId: show.id,
+                  imdbId: show.imdbId,
+                ),
+              ),
               const SliverToBoxAdapter(
                 child: Padding(
                   padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
@@ -551,49 +559,120 @@ class _EpisodeTile extends ConsumerWidget {
       onTap: () {
         final hasOverview =
             episode.overview != null && episode.overview!.isNotEmpty;
-        final hasGuestStars =
-            episode.guestStars != null && episode.guestStars!.isNotEmpty;
-        if (!hasOverview && !hasGuestStars && episode.rating == null) return;
+        if (!hasOverview && episode.rating == null) return;
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             title: Text(
               'S${episode.seasonNumber}E${episode.episodeNumber}'
               '${episode.title != null ? ' – ${episode.title}' : ''}',
             ),
-            content: SingleChildScrollView(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (episode.rating != null && episode.rating! > 0) ...[
-                    Row(
-                      children: [
-                        const Icon(Icons.star,
-                            size: 16, color: Colors.amber),
-                        const SizedBox(width: 4),
-                        Text(episode.rating!.toStringAsFixed(1)),
-                      ],
+            content: SizedBox(
+              width: 420,
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (episode.rating != null && episode.rating! > 0) ...[
+                      Row(
+                        children: [
+                          const Icon(Icons.star,
+                              size: 16, color: Colors.amber),
+                          const SizedBox(width: 4),
+                          Text(episode.rating!.toStringAsFixed(1)),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (hasOverview) Text(episode.overview!),
+                    Consumer(
+                      builder: (context, ref, _) {
+                        final credits =
+                            ref.watch(episodeCreditsProvider(episode.id));
+                        final people =
+                            ref.watch(peopleStreamProvider).value ?? [];
+                        final peopleById = {
+                          for (final p in people) p.id: p,
+                        };
+                        return credits.when(
+                          data: (entries) {
+                            if (entries.isEmpty) {
+                              return const SizedBox.shrink();
+                            }
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 12),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'GUEST STARS',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.white38,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  ...entries.map((credit) {
+                                    final person =
+                                        peopleById[credit.personId];
+                                    return Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 4),
+                                      child: Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 13,
+                                            backgroundColor:
+                                                Colors.white10,
+                                            backgroundImage:
+                                                person?.photoPath != null
+                                                    ? CachedNetworkImageProvider(
+                                                        person!.photoPath!)
+                                                    : null,
+                                            child: person?.photoPath ==
+                                                    null
+                                                ? const Icon(Icons.person,
+                                                    size: 12)
+                                                : null,
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              person?.name ?? 'Unknown',
+                                              style: const TextStyle(
+                                                  fontWeight:
+                                                      FontWeight.w500),
+                                            ),
+                                          ),
+                                          Expanded(
+                                            child: Text(
+                                              credit.character ?? '',
+                                              style: const TextStyle(
+                                                  color: Colors.white54),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  }),
+                                ],
+                              ),
+                            );
+                          },
+                          loading: () => const SizedBox.shrink(),
+                          error: (e, st) => const SizedBox.shrink(),
+                        );
+                      },
                     ),
-                    const SizedBox(height: 8),
                   ],
-                  if (hasOverview) Text(episode.overview!),
-                  if (hasGuestStars) ...[
-                    const SizedBox(height: 12),
-                    const Text(
-                      'GUEST STARS',
-                      style:
-                          TextStyle(fontSize: 11, color: Colors.white38),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(episode.guestStars!),
-                  ],
-                ],
+                ),
               ),
             ),
             actions: [
               TextButton(
-                onPressed: () => Navigator.of(context).pop(),
+                onPressed: () => Navigator.of(dialogContext).pop(),
                 child: const Text('Close'),
               ),
             ],

@@ -5,6 +5,7 @@ import '../database/database.dart';
 import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
+import '../services/wikidata_service.dart';
 
 // ---------------------------------------------------------------------------
 // Database
@@ -63,6 +64,17 @@ final episodesForShowProvider =
   return ref.watch(databaseProvider).watchEpisodesForShow(showId);
 });
 
+final episodeCreditsProvider =
+    StreamProvider.family<List<EpisodeCredit>, int>((ref, episodeId) {
+  return ref.watch(databaseProvider).watchEpisodeCredits(episodeId);
+});
+
+/// Key is (itemType, itemId) e.g. ('movie', 42) or ('show', 7).
+final awardsProvider =
+    StreamProvider.family<List<Award>, (String, int)>((ref, key) {
+  return ref.watch(databaseProvider).watchAwardsFor(key.$1, key.$2);
+});
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
@@ -112,6 +124,15 @@ final omdbServiceProvider = Provider<OmdbService?>((ref) {
   if (apiKey == null || apiKey.isEmpty) return null;
   return OmdbService(
     apiKey: apiKey,
+    proxyHost: settings?.proxyHost,
+    proxyPort: settings?.proxyPort,
+  );
+});
+
+/// No API key needed — Wikidata's query service is public.
+final wikidataServiceProvider = Provider<WikidataService>((ref) {
+  final settings = ref.watch(appSettingsProvider).value;
+  return WikidataService(
     proxyHost: settings?.proxyHost,
     proxyPort: settings?.proxyPort,
   );
@@ -784,8 +805,11 @@ class ScanController extends StateNotifier<ScanState> {
       }
     }
 
+    final externalIds = details['external_ids'] as Map<String, dynamic>?;
+
     return _ShowMatch(
       tmdbId: best.id,
+      imdbId: externalIds?['imdb_id'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
       backdropPath: TmdbService.imageUrl(
@@ -820,6 +844,8 @@ class ScanController extends StateNotifier<ScanState> {
           for (final ep in episodesList) {
             final epNum = ep['episode_number'] as int?;
             if (epNum == null) continue;
+            final guestStars =
+                (ep['guest_stars'] as List<dynamic>?) ?? [];
             await db.updateEpisodeMetadata(
               showId,
               seasonNum,
@@ -832,11 +858,32 @@ class ScanController extends StateNotifier<ScanState> {
                 size: 'w300',
               ),
               rating: (ep['vote_average'] as num?)?.toDouble(),
-              guestStars: ((ep['guest_stars'] as List<dynamic>?) ?? [])
-                  .take(10)
-                  .map((g) => g['name'])
-                  .join(', '),
+              guestStars:
+                  guestStars.take(10).map((g) => g['name']).join(', '),
             );
+
+            if (guestStars.isNotEmpty) {
+              try {
+                final episodeId =
+                    await db.getEpisodeId(showId, seasonNum, epNum);
+                if (episodeId != null) {
+                  final credits = guestStars.take(20).map((g) {
+                    return MovieCreditInput(
+                      name: (g['name'] as String?) ?? '',
+                      role: 'actor',
+                      character: g['character'] as String?,
+                      photoPath: TmdbService.imageUrl(
+                        g['profile_path'] as String?,
+                        size: 'w185',
+                      ),
+                    );
+                  }).where((c) => c.name.isNotEmpty).toList();
+                  await db.setEpisodeCredits(episodeId, credits);
+                }
+              } catch (_) {
+                // Guest star linking is best-effort.
+              }
+            }
           }
           gotFromTmdb = episodesList.isNotEmpty;
         } catch (_) {

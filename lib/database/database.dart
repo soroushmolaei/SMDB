@@ -47,6 +47,8 @@ class Movies extends Table {
   DateTimeColumn get watchedDate => dateTime().nullable()();
   RealColumn get personalRating => real().nullable()();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  BoolColumn get awardsChecked =>
+      boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('Show')
@@ -66,6 +68,8 @@ class Shows extends Table {
   TextColumn get folderPath => text()();
   DateTimeColumn get dateAdded => dateTime().withDefault(currentDateAndTime)();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
+  BoolColumn get awardsChecked =>
+      boolean().withDefault(const Constant(false))();
 }
 
 @DataClassName('Episode')
@@ -114,6 +118,14 @@ class ShowCredits extends Table {
   TextColumn get character => text().nullable()();
 }
 
+@DataClassName('EpisodeCredit')
+class EpisodeCredits extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  IntColumn get episodeId => integer().references(Episodes, #id)();
+  IntColumn get personId => integer().references(People, #id)();
+  TextColumn get character => text().nullable()(); // guest star role
+}
+
 @DataClassName('AppSetting')
 class AppSettings extends Table {
   TextColumn get key => text()();
@@ -145,6 +157,21 @@ class CollectionShows extends Table {
   IntColumn get showId => integer().references(Shows, #id)();
 }
 
+/// One award/nomination for a movie or show, sourced from Wikidata (looked
+/// up by IMDb id, lazily when the detail page is opened — TMDB/OMDb do not
+/// provide structured award data). [itemType] is 'movie' or 'show';
+/// [itemId] is the corresponding Movies/Shows row id. Not a foreign key
+/// since it can point to either table.
+@DataClassName('Award')
+class Awards extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get itemType => text()(); // 'movie' or 'show'
+  IntColumn get itemId => integer()();
+  TextColumn get name => text()(); // e.g. "Academy Award for Best Picture"
+  TextColumn get result => text()(); // 'Won' or 'Nominated'
+  IntColumn get year => integer().nullable()();
+}
+
 /// Plain input for [AppDatabase.setMovieCredits] — not a table, just a
 /// transfer object from the scanner/matcher to the database layer.
 class MovieCreditInput {
@@ -158,6 +185,14 @@ class MovieCreditInput {
     this.character,
     this.photoPath,
   });
+}
+
+/// Plain input for [AppDatabase.setAwardsFor].
+class AwardInput {
+  final String name;
+  final String result; // 'Won' or 'Nominated'
+  final int? year;
+  AwardInput({required this.name, required this.result, this.year});
 }
 
 // ---------------------------------------------------------------------------
@@ -174,16 +209,18 @@ class MovieCreditInput {
     People,
     MovieCredits,
     ShowCredits,
+    EpisodeCredits,
     Collections,
     CollectionMovies,
     CollectionShows,
+    Awards,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 9;
+  int get schemaVersion => 10;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -226,6 +263,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(collections);
             await m.createTable(collectionMovies);
             await m.createTable(collectionShows);
+          }
+          if (from < 10) {
+            await m.createTable(episodeCredits);
+            await m.createTable(awards);
+            await m.addColumn(movies, movies.awardsChecked);
+            await m.addColumn(shows, shows.awardsChecked);
           }
         },
       );
@@ -516,6 +559,49 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
+  // --- Episode credits (guest stars) ----------------------------------------
+
+  Stream<List<EpisodeCredit>> watchEpisodeCredits(int episodeId) =>
+      (select(episodeCredits)..where((c) => c.episodeId.equals(episodeId)))
+          .watch();
+
+  Future<int?> getEpisodeId(
+    int showId,
+    int seasonNumber,
+    int episodeNumber,
+  ) async {
+    final row = await (select(episodes)
+          ..where((e) =>
+              e.showId.equals(showId) &
+              e.seasonNumber.equals(seasonNumber) &
+              e.episodeNumber.equals(episodeNumber)))
+        .getSingleOrNull();
+    return row?.id;
+  }
+
+  /// Replaces all guest-star credits for [episodeId] (find-or-create the
+  /// person for each, then link). Safe to call on re-scan.
+  Future<void> setEpisodeCredits(
+    int episodeId,
+    List<MovieCreditInput> credits,
+  ) async {
+    await (delete(episodeCredits)
+          ..where((c) => c.episodeId.equals(episodeId)))
+        .go();
+    for (final credit in credits) {
+      if (credit.name.trim().isEmpty) continue;
+      final personId = await findOrCreatePerson(
+        credit.name,
+        photoPath: credit.photoPath,
+      );
+      await into(episodeCredits).insert(EpisodeCreditsCompanion.insert(
+        episodeId: episodeId,
+        personId: personId,
+        character: Value(credit.character),
+      ));
+    }
+  }
+
   // --- Collections (custom groups) -----------------------------------------
 
   Stream<List<Collection>> watchAllCollections() =>
@@ -603,6 +689,57 @@ class AppDatabase extends _$AppDatabase {
             ..where((c) =>
                 c.collectionId.equals(collectionId) & c.showId.equals(showId)))
           .go();
+
+  // --- Awards (lazily fetched from Wikidata) --------------------------------
+
+  Stream<List<Award>> watchAwardsFor(String itemType, int itemId) =>
+      (select(awards)
+            ..where((a) =>
+                a.itemType.equals(itemType) & a.itemId.equals(itemId)))
+          .watch();
+
+  Future<bool> hasAwardsFetched(String itemType, int itemId) async {
+    if (itemType == 'movie') {
+      final movie = await getMovieById(itemId);
+      return movie?.awardsChecked ?? true;
+    } else {
+      final show = await getShowById(itemId);
+      return show?.awardsChecked ?? true;
+    }
+  }
+
+  Future<void> markAwardsChecked(String itemType, int itemId) async {
+    if (itemType == 'movie') {
+      await (update(movies)..where((m) => m.id.equals(itemId)))
+          .write(MoviesCompanion(awardsChecked: Value(true)));
+    } else {
+      await (update(shows)..where((s) => s.id.equals(itemId)))
+          .write(ShowsCompanion(awardsChecked: Value(true)));
+    }
+  }
+
+  /// Replaces all awards for a movie/show. Called at most once per item
+  /// (lazily, when its detail page is first opened) since award data
+  /// rarely changes and Wikidata lookups are relatively slow.
+  Future<void> setAwardsFor(
+    String itemType,
+    int itemId,
+    List<AwardInput> items,
+  ) async {
+    await (delete(awards)
+          ..where((a) =>
+              a.itemType.equals(itemType) & a.itemId.equals(itemId)))
+        .go();
+    for (final award in items) {
+      await into(awards).insert(AwardsCompanion.insert(
+        itemType: itemType,
+        itemId: itemId,
+        name: award.name,
+        result: award.result,
+        year: Value(award.year),
+      ));
+    }
+  }
 
   // --- Settings ------------------------------------------------------------
 

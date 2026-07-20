@@ -262,7 +262,7 @@ class TmdbService {
   Future<Map<String, dynamic>> getShowDetails(int tmdbId) {
     return _get(
       '/tv/$tmdbId',
-      {'append_to_response': 'credits,content_ratings'},
+      {'append_to_response': 'credits,content_ratings,external_ids'},
     );
   }
 

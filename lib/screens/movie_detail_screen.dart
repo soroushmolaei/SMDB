@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/providers.dart';
+import '../widgets/awards_section.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/smart_image.dart';
 import 'add_to_group_dialog.dart';
@@ -489,6 +490,13 @@ class MovieDetailScreen extends ConsumerWidget {
                       ],
                     );
                   },
+                ),
+              ),
+              SliverToBoxAdapter(
+                child: AwardsSection(
+                  itemType: 'movie',
+                  itemId: movie.id,
+                  imdbId: movie.imdbId,
                 ),
               ),
               const SliverToBoxAdapter(child: SizedBox(height: 32)),
