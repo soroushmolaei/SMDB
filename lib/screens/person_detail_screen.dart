@@ -58,14 +58,6 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
     }
   }
 
-  String _roleLabel(String role, String? character) {
-    if (role == 'actor' && character != null && character.isNotEmpty) {
-      return 'as $character';
-    }
-    if (role.isEmpty) return '';
-    return role[0].toUpperCase() + role.substring(1);
-  }
-
   @override
   Widget build(BuildContext context) {
     final peopleAsync = ref.watch(peopleStreamProvider);
@@ -123,9 +115,169 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                 showById.containsKey(
                                     episodeById[c.episodeId]!.showId))
                             .toList();
-                        final totalCredits = myMovieCredits.length +
-                            myShowCredits.length +
-                            myEpisodeCredits.length;
+                        final directingCredits = myMovieCredits
+                            .where((c) => c.role == 'director')
+                            .toList();
+                        final writingCredits = myMovieCredits
+                            .where((c) => c.role == 'writer')
+                            .toList();
+                        final creatingCredits = myShowCredits
+                            .where((c) => c.role == 'creator')
+                            .toList();
+                        final actingMovieCredits = myMovieCredits
+                            .where((c) => c.role == 'actor')
+                            .toList();
+                        final actingShowCredits = myShowCredits
+                            .where((c) => c.role == 'actor')
+                            .toList();
+
+                        // Group guest-star episode credits by show, so a
+                        // person who guest-starred in 3 episodes of the
+                        // same show shows up as ONE show entry (expandable
+                        // to reveal which episodes), not 3 separate rows.
+                        final episodesByShow = <int, List<EpisodeCredit>>{};
+                        for (final c in myEpisodeCredits) {
+                          final showId = episodeById[c.episodeId]!.showId;
+                          episodesByShow
+                              .putIfAbsent(showId, () => [])
+                              .add(c);
+                        }
+
+                        final totalCredits = directingCredits.length +
+                            writingCredits.length +
+                            creatingCredits.length +
+                            actingMovieCredits.length +
+                            actingShowCredits.length +
+                            episodesByShow.length;
+
+                        Widget sectionHeader(String title) => Padding(
+                              padding: const EdgeInsets.only(
+                                  top: 20, bottom: 8),
+                              child: Text(
+                                title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 13,
+                                  color: Colors.white54,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            );
+
+                        Widget posterThumb(String? posterPath,
+                                IconData fallbackIcon) =>
+                            SizedBox(
+                              width: 40,
+                              height: 56,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(4),
+                                child: posterPath != null
+                                    ? CachedNetworkImage(
+                                        imageUrl: posterPath,
+                                        fit: BoxFit.cover,
+                                        errorWidget: (c, u, e) => Container(
+                                            color: Colors.white10),
+                                      )
+                                    : Container(
+                                        color: Colors.white10,
+                                        child: Icon(
+                                          fallbackIcon,
+                                          color: Colors.white24,
+                                          size: 18,
+                                        ),
+                                      ),
+                              ),
+                            );
+
+                        Widget movieRow(MovieCredit credit) {
+                          final movie = movieById[credit.movieId]!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: posterThumb(
+                                movie.posterPath, Icons.movie_outlined),
+                            title: Text(movie.title),
+                            subtitle: credit.character != null &&
+                                    credit.character!.isNotEmpty
+                                ? Text('as ${credit.character}')
+                                : null,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    MovieDetailScreen(movieId: movie.id),
+                              ),
+                            ),
+                          );
+                        }
+
+                        Widget showRow(ShowCredit credit) {
+                          final show = showById[credit.showId]!;
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            leading: posterThumb(
+                                show.posterPath, Icons.tv_outlined),
+                            title: Text(show.title),
+                            subtitle: credit.character != null &&
+                                    credit.character!.isNotEmpty
+                                ? Text('as ${credit.character}')
+                                : null,
+                            onTap: () => Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    ShowDetailScreen(showId: show.id),
+                              ),
+                            ),
+                          );
+                        }
+
+                        Widget guestStarGroup(
+                          int showId,
+                          List<EpisodeCredit> credits,
+                        ) {
+                          final show = showById[showId]!;
+                          final sorted = [...credits]..sort((a, b) {
+                              final ea = episodeById[a.episodeId]!;
+                              final eb = episodeById[b.episodeId]!;
+                              if (ea.seasonNumber != eb.seasonNumber) {
+                                return ea.seasonNumber
+                                    .compareTo(eb.seasonNumber);
+                              }
+                              return ea.episodeNumber
+                                  .compareTo(eb.episodeNumber);
+                            });
+                          return ExpansionTile(
+                            tilePadding: EdgeInsets.zero,
+                            childrenPadding: EdgeInsets.zero,
+                            leading: posterThumb(
+                                show.posterPath, Icons.tv_outlined),
+                            title: Text(show.title),
+                            subtitle: Text(
+                              '${sorted.length} episode'
+                              '${sorted.length > 1 ? 's' : ''}',
+                            ),
+                            children: sorted.map((c) {
+                              final ep = episodeById[c.episodeId]!;
+                              return ListTile(
+                                dense: true,
+                                contentPadding:
+                                    const EdgeInsets.only(left: 52),
+                                title: Text(
+                                  'S${ep.seasonNumber}E${ep.episodeNumber}'
+                                  '${ep.title != null && ep.title!.isNotEmpty ? ' – ${ep.title}' : ''}',
+                                ),
+                                subtitle: c.character != null &&
+                                        c.character!.isNotEmpty
+                                    ? Text('as ${c.character}')
+                                    : null,
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ShowDetailScreen(showId: show.id),
+                                  ),
+                                ),
+                              );
+                            }).toList(),
+                          );
+                        }
 
                         return ListView(
                           padding: const EdgeInsets.all(16),
@@ -205,7 +357,7 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                 style: const TextStyle(height: 1.4),
                               ),
                             ],
-                            const SizedBox(height: 24),
+                            const SizedBox(height: 12),
                             Text(
                               'Filmography ($totalCredits)',
                               style: const TextStyle(
@@ -213,131 +365,37 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                 fontSize: 16,
                               ),
                             ),
-                            const SizedBox(height: 8),
                             if (totalCredits == 0)
-                              const Text(
-                                'No linked movies or shows.',
-                                style: TextStyle(color: Colors.white54),
+                              const Padding(
+                                padding: EdgeInsets.only(top: 8),
+                                child: Text(
+                                  'No linked movies or shows.',
+                                  style: TextStyle(color: Colors.white54),
+                                ),
                               ),
-                            ...myMovieCredits.map((credit) {
-                              final movie = movieById[credit.movieId]!;
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: SizedBox(
-                                  width: 40,
-                                  height: 56,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: movie.posterPath != null
-                                        ? CachedNetworkImage(
-                                            imageUrl: movie.posterPath!,
-                                            fit: BoxFit.cover,
-                                            errorWidget: (c, u, e) =>
-                                                Container(
-                                                    color: Colors.white10),
-                                          )
-                                        : Container(
-                                            color: Colors.white10,
-                                            child: const Icon(
-                                              Icons.movie_outlined,
-                                              color: Colors.white24,
-                                              size: 18,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                                title: Text(movie.title),
-                                subtitle: Text(
-                                    _roleLabel(credit.role, credit.character)),
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        MovieDetailScreen(movieId: movie.id),
-                                  ),
-                                ),
-                              );
-                            }),
-                            ...myShowCredits.map((credit) {
-                              final show = showById[credit.showId]!;
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: SizedBox(
-                                  width: 40,
-                                  height: 56,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: show.posterPath != null
-                                        ? CachedNetworkImage(
-                                            imageUrl: show.posterPath!,
-                                            fit: BoxFit.cover,
-                                            errorWidget: (c, u, e) =>
-                                                Container(
-                                                    color: Colors.white10),
-                                          )
-                                        : Container(
-                                            color: Colors.white10,
-                                            child: const Icon(
-                                              Icons.tv_outlined,
-                                              color: Colors.white24,
-                                              size: 18,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                                title: Text(show.title),
-                                subtitle: Text(
-                                    _roleLabel(credit.role, credit.character)),
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ShowDetailScreen(showId: show.id),
-                                  ),
-                                ),
-                              );
-                            }),
-                            ...myEpisodeCredits.map((credit) {
-                              final episode = episodeById[credit.episodeId]!;
-                              final show = showById[episode.showId]!;
-                              return ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                leading: SizedBox(
-                                  width: 40,
-                                  height: 56,
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(4),
-                                    child: show.posterPath != null
-                                        ? CachedNetworkImage(
-                                            imageUrl: show.posterPath!,
-                                            fit: BoxFit.cover,
-                                            errorWidget: (c, u, e) =>
-                                                Container(
-                                                    color: Colors.white10),
-                                          )
-                                        : Container(
-                                            color: Colors.white10,
-                                            child: const Icon(
-                                              Icons.tv_outlined,
-                                              color: Colors.white24,
-                                              size: 18,
-                                            ),
-                                          ),
-                                  ),
-                                ),
-                                title: Text(
-                                  '${show.title} · S${episode.seasonNumber}'
-                                  'E${episode.episodeNumber}',
-                                ),
-                                subtitle: Text(
-                                  _roleLabel('actor', credit.character),
-                                ),
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ShowDetailScreen(showId: show.id),
-                                  ),
-                                ),
-                              );
-                            }),
+                            if (directingCredits.isNotEmpty) ...[
+                              sectionHeader('DIRECTING'),
+                              ...directingCredits.map(movieRow),
+                            ],
+                            if (writingCredits.isNotEmpty) ...[
+                              sectionHeader('WRITING'),
+                              ...writingCredits.map(movieRow),
+                            ],
+                            if (creatingCredits.isNotEmpty) ...[
+                              sectionHeader('CREATING'),
+                              ...creatingCredits.map(showRow),
+                            ],
+                            if (actingMovieCredits.isNotEmpty ||
+                                actingShowCredits.isNotEmpty) ...[
+                              sectionHeader('ACTING'),
+                              ...actingMovieCredits.map(movieRow),
+                              ...actingShowCredits.map(showRow),
+                            ],
+                            if (episodesByShow.isNotEmpty) ...[
+                              sectionHeader('GUEST STARRING'),
+                              ...episodesByShow.entries
+                                  .map((e) => guestStarGroup(e.key, e.value)),
+                            ],
                           ],
                         );
                       },
