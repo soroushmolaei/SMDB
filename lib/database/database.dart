@@ -6,6 +6,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../services/app_config_service.dart';
+
 part 'database.g.dart';
 
 // ---------------------------------------------------------------------------
@@ -565,6 +567,9 @@ class AppDatabase extends _$AppDatabase {
       (select(episodeCredits)..where((c) => c.episodeId.equals(episodeId)))
           .watch();
 
+  Stream<List<EpisodeCredit>> watchAllEpisodeCredits() =>
+      select(episodeCredits).watch();
+
   Future<int?> getEpisodeId(
     int showId,
     int seasonNumber,
@@ -758,12 +763,8 @@ class AppDatabase extends _$AppDatabase {
 
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
-    final dbFolder = await getApplicationDocumentsDirectory();
-    final smdbFolder = Directory(p.join(dbFolder.path, 'SMDB'));
-    if (!await smdbFolder.exists()) {
-      await smdbFolder.create(recursive: true);
-    }
-    final file = File(p.join(smdbFolder.path, 'library.sqlite'));
+    final filePath = await resolveDbFilePath();
+    final file = File(filePath);
 
     // sqlite3 needs a writable temp directory; the default one may not be
     // accessible in some sandboxed environments.
@@ -772,4 +773,26 @@ LazyDatabase _openConnection() {
 
     return NativeDatabase.createInBackground(file);
   });
+}
+
+/// Resolves the full path to library.sqlite: a user-chosen folder from
+/// [AppConfigService] if one has been set (Settings → Database → Change
+/// Location), otherwise the default Documents/SMDB folder.
+Future<String> resolveDbFilePath() async {
+  final config = await AppConfigService.load();
+  final customPath = config.databasePath;
+  if (customPath != null && customPath.isNotEmpty) {
+    final dir = Directory(customPath);
+    if (!await dir.exists()) {
+      await dir.create(recursive: true);
+    }
+    return p.join(customPath, 'library.sqlite');
+  }
+
+  final docsDir = await getApplicationDocumentsDirectory();
+  final smdbFolder = Directory(p.join(docsDir.path, 'SMDB'));
+  if (!await smdbFolder.exists()) {
+    await smdbFolder.create(recursive: true);
+  }
+  return p.join(smdbFolder.path, 'library.sqlite');
 }

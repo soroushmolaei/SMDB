@@ -617,43 +617,59 @@ class _EpisodeTile extends ConsumerWidget {
                                   ...entries.map((credit) {
                                     final person =
                                         peopleById[credit.personId];
-                                    return Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 4),
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 13,
-                                            backgroundColor:
-                                                Colors.white10,
-                                            backgroundImage:
-                                                person?.photoPath != null
-                                                    ? CachedNetworkImageProvider(
-                                                        person!.photoPath!)
-                                                    : null,
-                                            child: person?.photoPath ==
-                                                    null
-                                                ? const Icon(Icons.person,
-                                                    size: 12)
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              person?.name ?? 'Unknown',
-                                              style: const TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.w500),
+                                    return InkWell(
+                                      onTap: person == null
+                                          ? null
+                                          : () {
+                                              Navigator.of(context).pop();
+                                              Navigator.of(context).push(
+                                                MaterialPageRoute(
+                                                  builder: (_) =>
+                                                      PersonDetailScreen(
+                                                    personId: person.id,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                            vertical: 4),
+                                        child: Row(
+                                          children: [
+                                            CircleAvatar(
+                                              radius: 13,
+                                              backgroundColor:
+                                                  Colors.white10,
+                                              backgroundImage: person
+                                                          ?.photoPath !=
+                                                      null
+                                                  ? CachedNetworkImageProvider(
+                                                      person!.photoPath!)
+                                                  : null,
+                                              child: person?.photoPath ==
+                                                      null
+                                                  ? const Icon(Icons.person,
+                                                      size: 12)
+                                                  : null,
                                             ),
-                                          ),
-                                          Expanded(
-                                            child: Text(
-                                              credit.character ?? '',
-                                              style: const TextStyle(
-                                                  color: Colors.white54),
+                                            const SizedBox(width: 8),
+                                            Expanded(
+                                              child: Text(
+                                                person?.name ?? 'Unknown',
+                                                style: const TextStyle(
+                                                    fontWeight:
+                                                        FontWeight.w500),
+                                              ),
                                             ),
-                                          ),
-                                        ],
+                                            Expanded(
+                                              child: Text(
+                                                credit.character ?? '',
+                                                style: const TextStyle(
+                                                    color: Colors.white54),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     );
                                   }),

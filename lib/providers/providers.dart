@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
+import '../services/app_config_service.dart';
 import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
@@ -69,6 +70,17 @@ final episodeCreditsProvider =
   return ref.watch(databaseProvider).watchEpisodeCredits(episodeId);
 });
 
+final allEpisodeCreditsStreamProvider =
+    StreamProvider<List<EpisodeCredit>>((ref) {
+  return ref.watch(databaseProvider).watchAllEpisodeCredits();
+});
+
+/// The resolved, absolute path to library.sqlite (default location or a
+/// user-chosen override), for display in Settings.
+final databasePathProvider = FutureProvider<String>((ref) {
+  return resolveDbFilePath();
+});
+
 /// Key is (itemType, itemId) e.g. ('movie', 42) or ('show', 7).
 final awardsProvider =
     StreamProvider.family<List<Award>, (String, int)>((ref, key) {
@@ -93,17 +105,15 @@ class AppSettingsData {
 }
 
 final appSettingsProvider = FutureProvider<AppSettingsData>((ref) async {
-  final db = ref.watch(databaseProvider);
-  final apiKey = await db.getSetting('tmdb_api_key');
-  final omdbKey = await db.getSetting('omdb_api_key');
-  final proxyHost = await db.getSetting('proxy_host');
-  final proxyPortStr = await db.getSetting('proxy_port');
+  final config = await AppConfigService.load();
+  final apiKey = config.tmdbApiKey;
+  final omdbKey = config.omdbApiKey;
+  final proxyHost = config.proxyHost;
   return AppSettingsData(
     tmdbApiKey: (apiKey != null && apiKey.isNotEmpty) ? apiKey : null,
     omdbApiKey: (omdbKey != null && omdbKey.isNotEmpty) ? omdbKey : null,
     proxyHost: (proxyHost != null && proxyHost.isNotEmpty) ? proxyHost : null,
-    proxyPort:
-        (proxyPortStr != null) ? int.tryParse(proxyPortStr) : null,
+    proxyPort: config.proxyPort,
   );
 });
 
