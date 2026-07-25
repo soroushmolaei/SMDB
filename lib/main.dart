@@ -1,29 +1,40 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'providers/providers.dart';
 import 'screens/app_shell.dart';
+import 'services/app_config_service.dart';
+import 'theme/app_theme.dart';
 
-void main() {
-  runApp(const ProviderScope(child: SmdbApp()));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Load once, before the first frame — otherwise the app would flash the
+  // default theme for a moment while smdb_config.json loads.
+  final initialConfig = await AppConfigService.load();
+
+  runApp(
+    ProviderScope(
+      overrides: [
+        initialAppConfigProvider.overrideWithValue(initialConfig),
+      ],
+      child: const SmdbApp(),
+    ),
+  );
 }
 
-class SmdbApp extends StatelessWidget {
+class SmdbApp extends ConsumerWidget {
   const SmdbApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final themeSettings = ref.watch(themeControllerProvider);
+
     return MaterialApp(
       title: 'SMDB',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        brightness: Brightness.dark,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF6C5CE7),
-          brightness: Brightness.dark,
-        ),
-        scaffoldBackgroundColor: const Color(0xFF121212),
-      ),
+      theme: buildAppTheme(themeSettings.color, Brightness.light),
+      darkTheme: buildAppTheme(themeSettings.color, Brightness.dark),
+      themeMode: themeSettings.mode,
       home: const AppShell(),
     );
   }

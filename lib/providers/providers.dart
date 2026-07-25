@@ -7,6 +7,7 @@ import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
 import '../services/wikidata_service.dart';
+import '../theme/app_theme.dart';
 
 // ---------------------------------------------------------------------------
 // Database
@@ -115,6 +116,43 @@ final appSettingsProvider = FutureProvider<AppSettingsData>((ref) async {
     proxyHost: (proxyHost != null && proxyHost.isNotEmpty) ? proxyHost : null,
     proxyPort: config.proxyPort,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Theme (color + light/dark), persisted via AppConfigService
+// ---------------------------------------------------------------------------
+
+/// Overridden in main() with the config loaded before runApp(), so the
+/// correct theme is already active on the very first frame — no flash of
+/// a default theme while the config file loads asynchronously.
+final initialAppConfigProvider = Provider<AppConfig>((ref) {
+  throw UnimplementedError(
+    'initialAppConfigProvider must be overridden in main()',
+  );
+});
+
+class ThemeController extends StateNotifier<ThemeSettings> {
+  ThemeController(AppConfig initial)
+      : super(ThemeSettings(
+          color: AppThemeColor.fromKey(initial.themeColor),
+          mode: ThemeModeStorage.fromKey(initial.themeMode),
+        ));
+
+  Future<void> setColor(AppThemeColor color) async {
+    state = state.copyWith(color: color);
+    await AppConfigService.update(themeColor: color.storageKey);
+  }
+
+  Future<void> setMode(ThemeMode mode) async {
+    state = state.copyWith(mode: mode);
+    await AppConfigService.update(themeMode: mode.storageKey);
+  }
+}
+
+final themeControllerProvider =
+    StateNotifierProvider<ThemeController, ThemeSettings>((ref) {
+  final initial = ref.watch(initialAppConfigProvider);
+  return ThemeController(initial);
 });
 
 final tmdbServiceProvider = Provider<TmdbService?>((ref) {

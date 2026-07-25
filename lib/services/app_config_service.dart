@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-/// App-level configuration: API keys, proxy settings, and an optional
-/// override for where the library database file lives.
+/// App-level configuration: API keys, proxy settings, an optional override
+/// for where the library database file lives, and appearance settings.
 ///
 /// Stored as a small JSON file next to the app's .exe (not inside the
 /// SQLite database, and not in the Documents folder) so it survives
@@ -20,12 +20,19 @@ class AppConfig {
   /// location" (the user's Documents folder).
   final String? databasePath;
 
+  /// Storage keys for AppThemeColor/ThemeMode — kept as plain strings
+  /// here so this service doesn't need to depend on the theme module.
+  final String? themeColor;
+  final String? themeMode;
+
   AppConfig({
     this.tmdbApiKey,
     this.omdbApiKey,
     this.proxyHost,
     this.proxyPort,
     this.databasePath,
+    this.themeColor,
+    this.themeMode,
   });
 
   Map<String, dynamic> toJson() => {
@@ -34,6 +41,8 @@ class AppConfig {
         'proxy_host': proxyHost,
         'proxy_port': proxyPort,
         'database_path': databasePath,
+        'theme_color': themeColor,
+        'theme_mode': themeMode,
       };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
@@ -42,6 +51,8 @@ class AppConfig {
         proxyHost: json['proxy_host'] as String?,
         proxyPort: json['proxy_port'] as int?,
         databasePath: json['database_path'] as String?,
+        themeColor: json['theme_color'] as String?,
+        themeMode: json['theme_mode'] as String?,
       );
 }
 
@@ -93,6 +104,8 @@ class AppConfigService {
     bool updateProxyPort = false,
     String? databasePath,
     bool clearDatabasePath = false,
+    String? themeColor,
+    String? themeMode,
   }) async {
     final current = await load();
     final updated = AppConfig(
@@ -103,6 +116,8 @@ class AppConfigService {
           updateProxyPort ? proxyPort : (proxyPort ?? current.proxyPort),
       databasePath:
           clearDatabasePath ? null : (databasePath ?? current.databasePath),
+      themeColor: themeColor ?? current.themeColor,
+      themeMode: themeMode ?? current.themeMode,
     );
     return save(updated);
   }

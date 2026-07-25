@@ -10,6 +10,7 @@ import '../providers/providers.dart';
 import '../services/app_config_service.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
+import '../theme/app_theme.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -318,9 +319,88 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       body: settingsAsync.when(
         data: (data) {
           _loadIfNeeded(data);
+          final themeSettings = ref.watch(themeControllerProvider);
+          final onSurface = Theme.of(context).colorScheme.onSurface;
+          final onSurfaceVariant =
+              Theme.of(context).colorScheme.onSurfaceVariant;
           return ListView(
             padding: const EdgeInsets.all(16),
             children: [
+              Text(
+                'Appearance',
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: onSurface),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Color',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: AppThemeColor.values.map((c) {
+                  final selected = themeSettings.color == c;
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Tooltip(
+                      message: c.label,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: () => ref
+                            .read(themeControllerProvider.notifier)
+                            .setColor(c),
+                        child: Container(
+                          width: 36,
+                          height: 36,
+                          decoration: BoxDecoration(
+                            color: c.seed,
+                            shape: BoxShape.circle,
+                            border: selected
+                                ? Border.all(color: onSurface, width: 2.5)
+                                : null,
+                          ),
+                          child: selected
+                              ? const Icon(Icons.check,
+                                  color: Colors.white, size: 18)
+                              : null,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Mode',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              SegmentedButton<ThemeMode>(
+                segments: const [
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    label: Text('Dark'),
+                    icon: Icon(Icons.dark_mode_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    label: Text('Light'),
+                    icon: Icon(Icons.light_mode_outlined, size: 16),
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    label: Text('System'),
+                    icon: Icon(Icons.brightness_auto_outlined, size: 16),
+                  ),
+                ],
+                selected: {themeSettings.mode},
+                onSelectionChanged: (selected) => ref
+                    .read(themeControllerProvider.notifier)
+                    .setMode(selected.first),
+              ),
+              const SizedBox(height: 32),
               const Text(
                 'TMDB',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
