@@ -6,7 +6,9 @@ import 'package:url_launcher/url_launcher.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../widgets/awards_section.dart';
+import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
+import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
 import 'add_to_group_dialog.dart';
 import 'edit_show_screen.dart';
@@ -20,6 +22,7 @@ class ShowDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final showsAsync = ref.watch(showsStreamProvider);
+    final colorScheme = Theme.of(context).colorScheme;
 
     return Scaffold(
       body: showsAsync.when(
@@ -42,50 +45,205 @@ class ShowDetailScreen extends ConsumerWidget {
           final seasons = episodes.map((e) => e.seasonNumber).toSet().toList()
             ..sort();
 
-          return CustomScrollView(
-            slivers: [
-              SliverAppBar(
-                expandedHeight: 220,
-                pinned: true,
-                actions: [
-                  Builder(
-                    builder: (context) {
-                      final scanState = ref.watch(scanControllerProvider);
-                      final refreshing =
-                          scanState.status == ScanStatus.matching &&
-                              scanState.currentItem == show.title;
-                      return IconButton(
-                        icon: refreshing
-                            ? const SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                    strokeWidth: 2),
-                              )
-                            : const Icon(Icons.refresh),
-                        tooltip: 'Update metadata',
-                        onPressed: refreshing
-                            ? null
-                            : () async {
-                                final ok = await ref
-                                    .read(scanControllerProvider.notifier)
-                                    .refreshShow(show.id);
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        ok
-                                            ? 'Updated'
-                                            : 'No match found',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                      );
-                    },
+          final scanState = ref.watch(scanControllerProvider);
+          final refreshing = scanState.status == ScanStatus.matching &&
+              scanState.currentItem == show.title;
+
+          return Stack(
+            children: [
+              CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: _ShowHero(
+                      title: show.title,
+                      contentRating: show.contentRating,
+                      status: show.status,
+                      rating: show.rating,
+                      backdropUrl: show.backdropPath,
+                      posterUrl: show.posterPath,
+                    ),
                   ),
-                  IconButton(
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              show.isFavorite
+                                  ? Icons.star
+                                  : Icons.star_border,
+                              color: show.isFavorite ? Colors.amber : null,
+                            ),
+                            tooltip: 'Favorite',
+                            onPressed: () => ref
+                                .read(databaseProvider)
+                                .setShowFavorite(show.id, !show.isFavorite),
+                          ),
+                          if (show.imdbId != null)
+                            IconButton(
+                              icon: const Icon(Icons.open_in_new),
+                              tooltip: 'Open on IMDb',
+                              onPressed: () => launchUrl(
+                                Uri.parse(
+                                  'https://www.imdb.com/title/${show.imdbId}/',
+                                ),
+                                mode: LaunchMode.externalApplication,
+                              ),
+                            ),
+                          IconButton(
+                            icon: const Icon(Icons.playlist_add_outlined),
+                            tooltip: 'Add to group',
+                            onPressed: () => showAddToGroupDialog(
+                              context,
+                              ref,
+                              kind: 'show',
+                              itemId: show.id,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (show.genres != null && show.genres!.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding:
+                            const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: show.genres!
+                              .split(',')
+                              .map((g) => g.trim())
+                              .where((g) => g.isNotEmpty)
+                              .map(
+                                (g) => ActionChip(
+                                  label: Text(g),
+                                  onPressed: () =>
+                                      Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          GenreShowsScreen(genre: g),
+                                    ),
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ),
+                    ),
+                  if (show.overview != null && show.overview!.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Text(
+                          show.overview!,
+                          style: TextStyle(
+                            color: colorScheme.onSurface,
+                            height: 1.4,
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (showCredits.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: _CreditsSection(
+                        credits: showCredits,
+                        peopleById: peopleById,
+                      ),
+                    ),
+                  SliverToBoxAdapter(
+                    child: AwardsSection(
+                      itemType: 'show',
+                      itemId: show.id,
+                      imdbId: show.imdbId,
+                    ),
+                  ),
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                      child: Text(
+                        'Episodes',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (seasons.isEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'No episodes found.',
+                          style:
+                              TextStyle(color: colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    )
+                  else
+                    SliverList(
+                      delegate: SliverChildBuilderDelegate(
+                        (context, index) {
+                          final season = seasons[index];
+                          final seasonEpisodes = episodes
+                              .where((e) => e.seasonNumber == season)
+                              .toList()
+                            ..sort((a, b) =>
+                                a.episodeNumber.compareTo(b.episodeNumber));
+                          return ExpansionTile(
+                            title: Text('Season $season'),
+                            subtitle:
+                                Text('${seasonEpisodes.length} episodes'),
+                            children: seasonEpisodes
+                                .map((ep) => _EpisodeTile(episode: ep))
+                                .toList(),
+                          );
+                        },
+                        childCount: seasons.length,
+                      ),
+                    ),
+                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
+                ],
+              ),
+              DetailTopBar(
+                actions: [
+                  HeroIconButton(
+                    icon: refreshing
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor:
+                                  AlwaysStoppedAnimation(Colors.white),
+                            ),
+                          )
+                        : const Icon(Icons.refresh),
+                    tooltip: 'Update metadata',
+                    onPressed: refreshing
+                        ? null
+                        : () async {
+                            final ok = await ref
+                                .read(scanControllerProvider.notifier)
+                                .refreshShow(show.id);
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content:
+                                      Text(ok ? 'Updated' : 'No match found'),
+                                ),
+                              );
+                            }
+                          },
+                  ),
+                  HeroIconButton(
                     icon: const Icon(Icons.edit_outlined),
                     tooltip: 'Edit',
                     onPressed: () => Navigator.of(context).push(
@@ -94,7 +252,7 @@ class ShowDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  IconButton(
+                  HeroIconButton(
                     icon: const Icon(Icons.delete_outline),
                     tooltip: 'Delete',
                     onPressed: () async {
@@ -128,230 +286,186 @@ class ShowDetailScreen extends ConsumerWidget {
                     },
                   ),
                 ],
-                flexibleSpace: FlexibleSpaceBar(
-                  background: GestureDetector(
-                    onTap: () => FullscreenImageViewer.show(
-                      context,
-                      show.backdropPath ?? show.posterPath,
-                    ),
-                    child: show.backdropPath != null
-                        ? SmartImage(
-                            path: show.backdropPath!,
-                            fit: BoxFit.cover,
-                            errorBuilder: (c) =>
-                                Container(color: Colors.black26),
-                          )
-                        : Container(color: Colors.black26),
-                  ),
-                ),
               ),
-              SliverToBoxAdapter(
-                child: Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      GestureDetector(
-                        onTap: () => FullscreenImageViewer.show(
-                          context,
-                          show.posterPath,
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: SizedBox(
-                            width: 110,
-                            height: 165,
-                            child: show.posterPath != null
-                                ? SmartImage(
-                                    path: show.posterPath!, fit: BoxFit.cover)
-                                : Container(color: Colors.white10),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              show.title,
-                              style: const TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            if (show.contentRating != null ||
-                                show.status != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Text(
-                                  [
-                                    if (show.contentRating != null &&
-                                        show.contentRating!.isNotEmpty)
-                                      show.contentRating!,
-                                    if (show.status != null &&
-                                        show.status!.isNotEmpty)
-                                      show.status!,
-                                  ].join(' • '),
-                                  style:
-                                      const TextStyle(color: Colors.white54),
-                                ),
-                              ),
-                            if (show.rating != null)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(
-                                  children: [
-                                    const Icon(Icons.star,
-                                        size: 16, color: Colors.amber),
-                                    const SizedBox(width: 4),
-                                    Text(show.rating!.toStringAsFixed(1)),
-                                  ],
-                                ),
-                              ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: Icon(
-                                    show.isFavorite
-                                        ? Icons.star
-                                        : Icons.star_border,
-                                    color:
-                                        show.isFavorite ? Colors.amber : null,
-                                  ),
-                                  tooltip: 'Favorite',
-                                  onPressed: () => ref
-                                      .read(databaseProvider)
-                                      .setShowFavorite(
-                                          show.id, !show.isFavorite),
-                                ),
-                                if (show.imdbId != null)
-                                  IconButton(
-                                    icon: const Icon(Icons.open_in_new),
-                                    tooltip: 'Open on IMDb',
-                                    onPressed: () => launchUrl(
-                                      Uri.parse(
-                                        'https://www.imdb.com/title/${show.imdbId}/',
-                                      ),
-                                      mode: LaunchMode.externalApplication,
-                                    ),
-                                  ),
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.playlist_add_outlined),
-                                  tooltip: 'Add to group',
-                                  onPressed: () => showAddToGroupDialog(
-                                    context,
-                                    ref,
-                                    kind: 'show',
-                                    itemId: show.id,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-              if (show.genres != null && show.genres!.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Wrap(
-                      spacing: 8,
-                      runSpacing: 4,
-                      children: show.genres!
-                          .split(',')
-                          .map((g) => g.trim())
-                          .where((g) => g.isNotEmpty)
-                          .map(
-                            (g) => ActionChip(
-                              label: Text(g),
-                              onPressed: () => Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => GenreShowsScreen(genre: g),
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    ),
-                  ),
-                ),
-              if (show.overview != null && show.overview!.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(show.overview!),
-                  ),
-                ),
-              if (showCredits.isNotEmpty)
-                SliverToBoxAdapter(
-                  child: _CreditsSection(
-                    credits: showCredits,
-                    peopleById: peopleById,
-                  ),
-                ),
-              SliverToBoxAdapter(
-                child: AwardsSection(
-                  itemType: 'show',
-                  itemId: show.id,
-                  imdbId: show.imdbId,
-                ),
-              ),
-              const SliverToBoxAdapter(
-                child: Padding(
-                  padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
-                  child: Text(
-                    'Episodes',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                    ),
-                  ),
-                ),
-              ),
-              if (seasons.isEmpty)
-                const SliverToBoxAdapter(
-                  child: Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text(
-                      'No episodes found.',
-                      style: TextStyle(color: Colors.white54),
-                    ),
-                  ),
-                )
-              else
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, index) {
-                      final season = seasons[index];
-                      final seasonEpisodes = episodes
-                          .where((e) => e.seasonNumber == season)
-                          .toList()
-                        ..sort((a, b) =>
-                            a.episodeNumber.compareTo(b.episodeNumber));
-                      return ExpansionTile(
-                        title: Text('Season $season'),
-                        subtitle: Text('${seasonEpisodes.length} episodes'),
-                        children: seasonEpisodes
-                            .map((ep) => _EpisodeTile(episode: ep))
-                            .toList(),
-                      );
-                    },
-                    childCount: seasons.length,
-                  ),
-                ),
-              const SliverToBoxAdapter(child: SizedBox(height: 32)),
             ],
           );
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),
+      ),
+    );
+  }
+}
+
+/// The backdrop + gradient + poster + title/metadata/score hero block at
+/// the top of the show detail page. Intentionally stays dark with white
+/// text regardless of the app's light/dark theme, matching the movie
+/// detail hero and most media apps' treatment of a photographic backdrop.
+class _ShowHero extends StatelessWidget {
+  final String title;
+  final String? contentRating;
+  final String? status;
+  final double? rating;
+  final String? backdropUrl;
+  final String? posterUrl;
+
+  const _ShowHero({
+    required this.title,
+    required this.contentRating,
+    required this.status,
+    required this.rating,
+    required this.backdropUrl,
+    required this.posterUrl,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 400,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          GestureDetector(
+            onTap: () => FullscreenImageViewer.show(
+              context,
+              backdropUrl ?? posterUrl,
+            ),
+            child: backdropUrl != null
+                ? SmartImage(
+                    path: backdropUrl!,
+                    fit: BoxFit.cover,
+                    errorBuilder: (c) => Container(color: Colors.black),
+                  )
+                : Container(color: Colors.black),
+          ),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                stops: const [0.0, 0.5, 1.0],
+                colors: [
+                  Colors.black.withOpacity(0.15),
+                  Colors.black.withOpacity(0.45),
+                  Colors.black.withOpacity(0.96),
+                ],
+              ),
+            ),
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  GestureDetector(
+                    onTap: () =>
+                        FullscreenImageViewer.show(context, posterUrl),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        width: 110,
+                        height: 165,
+                        decoration: BoxDecoration(
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.5),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: posterUrl != null
+                            ? SmartImage(path: posterUrl!, fit: BoxFit.cover)
+                            : Container(color: Colors.white10),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                            height: 1.15,
+                          ),
+                        ),
+                        if (contentRating != null || status != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              children: [
+                                if (contentRating != null &&
+                                    contentRating!.isNotEmpty)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 5, vertical: 1),
+                                    decoration: BoxDecoration(
+                                      border: Border.all(
+                                          color: Colors.white54),
+                                      borderRadius:
+                                          BorderRadius.circular(3),
+                                    ),
+                                    child: Text(
+                                      contentRating!,
+                                      style: const TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                if (status != null && status!.isNotEmpty)
+                                  Text(
+                                    status!,
+                                    style: const TextStyle(
+                                      color: Colors.white70,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        if (rating != null && rating! > 0)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: Row(
+                              children: [
+                                ScoreBadge(rating: rating, size: 40),
+                                const SizedBox(width: 8),
+                                const Text(
+                                  'User\nScore',
+                                  style: TextStyle(
+                                    color: Colors.white70,
+                                    fontSize: 11,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -365,6 +479,8 @@ class _CreditsSection extends StatelessWidget {
   Widget _roleSection(BuildContext context, String title, String role) {
     final entries = credits.where((c) => c.role == role).toList();
     if (entries.isEmpty) return const SizedBox.shrink();
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
@@ -372,7 +488,7 @@ class _CreditsSection extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(fontSize: 12, color: Colors.white38),
+            style: TextStyle(fontSize: 12, color: muted),
           ),
           const SizedBox(height: 6),
           Wrap(
@@ -383,7 +499,7 @@ class _CreditsSection extends StatelessWidget {
               final label = person?.name ?? 'Unknown';
               return ActionChip(
                 avatar: CircleAvatar(
-                  backgroundColor: Colors.white10,
+                  backgroundColor: surfaceVariant,
                   backgroundImage: person?.photoPath != null
                       ? CachedNetworkImageProvider(person!.photoPath!)
                       : null,
@@ -415,14 +531,16 @@ class _CreditsSection extends StatelessWidget {
   Widget _castList(BuildContext context) {
     final entries = credits.where((c) => c.role == 'actor').toList();
     if (entries.isEmpty) return const SizedBox.shrink();
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'CAST',
-            style: TextStyle(fontSize: 12, color: Colors.white38),
+            style: TextStyle(fontSize: 12, color: muted),
           ),
           const SizedBox(height: 6),
           ...entries.map((c) {
@@ -442,7 +560,7 @@ class _CreditsSection extends StatelessWidget {
                   children: [
                     CircleAvatar(
                       radius: 16,
-                      backgroundColor: Colors.white10,
+                      backgroundColor: surfaceVariant,
                       backgroundImage: person?.photoPath != null
                           ? CachedNetworkImageProvider(person!.photoPath!)
                           : null,
@@ -460,7 +578,7 @@ class _CreditsSection extends StatelessWidget {
                     Expanded(
                       child: Text(
                         c.character ?? '',
-                        style: const TextStyle(color: Colors.white54),
+                        style: TextStyle(color: muted),
                       ),
                     ),
                   ],
@@ -492,6 +610,7 @@ class _EpisodeTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     return ListTile(
       leading: GestureDetector(
         onTap: () =>
@@ -505,11 +624,10 @@ class _EpisodeTile extends ConsumerWidget {
                 ? CachedNetworkImage(
                     imageUrl: episode.stillPath!,
                     fit: BoxFit.cover,
-                    errorWidget: (c, u, e) =>
-                        Container(color: Colors.white10),
+                    errorWidget: (c, u, e) => Container(color: surfaceVariant),
                   )
                 : Container(
-                    color: Colors.white10,
+                    color: surfaceVariant,
                     child: const Icon(Icons.tv_outlined,
                         color: Colors.white24, size: 16),
                   ),
