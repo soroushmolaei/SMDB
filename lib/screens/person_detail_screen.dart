@@ -7,6 +7,8 @@ import '../providers/providers.dart';
 import '../services/tmdb_service.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import 'movie_detail_screen.dart';
+import 'person_picker_dialog.dart';
+import 'shared_filmography_screen.dart';
 import 'show_detail_screen.dart';
 
 class PersonDetailScreen extends ConsumerStatefulWidget {
@@ -69,7 +71,47 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
     final episodesAsync = ref.watch(allEpisodesStreamProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Person')),
+      appBar: AppBar(
+        title: const Text('Person'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.compare_arrows),
+            tooltip: 'Find shared titles',
+            onPressed: () async {
+              final people = ref.read(peopleStreamProvider).value;
+              if (people == null) return;
+              final meMatches =
+                  people.where((p) => p.id == widget.personId);
+              if (meMatches.isEmpty) return;
+              final me = meMatches.first;
+
+              final otherIds = await showPersonPickerDialog(
+                context,
+                ref,
+                excludeId: widget.personId,
+              );
+              if (otherIds == null ||
+                  otherIds.isEmpty ||
+                  !context.mounted) {
+                return;
+              }
+
+              final namesById = {for (final p in people) p.id: p.name};
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => SharedFilmographyScreen(
+                    personIds: [widget.personId, ...otherIds],
+                    personNames: [
+                      me.name,
+                      ...otherIds.map((id) => namesById[id] ?? '?'),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
       body: peopleAsync.when(
         data: (people) {
           final personMatches =
