@@ -165,6 +165,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       dialogTitle: 'Choose a folder for the database',
     );
     if (newFolder == null) return;
+    if (!mounted) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
