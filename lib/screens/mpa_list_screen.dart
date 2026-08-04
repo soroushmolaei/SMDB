@@ -51,7 +51,7 @@ class MpaListScreen extends ConsumerWidget {
           itemBuilder: (context, index) {
             final rating = ratings[index];
             return Card(
-              color: Colors.white.withOpacity(0.05),
+              color: Colors.white.withValues(alpha: 0.05),
               child: InkWell(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(

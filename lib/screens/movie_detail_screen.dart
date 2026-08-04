@@ -499,9 +499,9 @@ class _MovieHero extends StatelessWidget {
                 end: Alignment.bottomCenter,
                 stops: const [0.0, 0.5, 1.0],
                 colors: [
-                  Colors.black.withOpacity(0.15),
-                  Colors.black.withOpacity(0.45),
-                  Colors.black.withOpacity(0.96),
+                  Colors.black.withValues(alpha: 0.15),
+                  Colors.black.withValues(alpha: 0.45),
+                  Colors.black.withValues(alpha: 0.96),
                 ],
               ),
             ),
@@ -526,7 +526,7 @@ class _MovieHero extends StatelessWidget {
                         decoration: BoxDecoration(
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.5),
+                              color: Colors.black.withValues(alpha: 0.5),
                               blurRadius: 12,
                               offset: const Offset(0, 4),
                             ),

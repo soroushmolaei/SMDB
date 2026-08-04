@@ -540,7 +540,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFF6C5CE7).withOpacity(0.18) : null,
+      color: selected ? const Color(0xFF6C5CE7).withValues(alpha: 0.18) : null,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -697,7 +697,9 @@ class _AlphabetIndex extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 3),
               color:
-                  isSelected ? const Color(0xFF6C5CE7).withOpacity(0.3) : null,
+                  isSelected
+                      ? const Color(0xFF6C5CE7).withValues(alpha: 0.3)
+                      : null,
               alignment: Alignment.center,
               child: Text(
                 l,

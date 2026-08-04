@@ -716,10 +716,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> markAwardsChecked(String itemType, int itemId) async {
     if (itemType == 'movie') {
       await (update(movies)..where((m) => m.id.equals(itemId)))
-          .write(MoviesCompanion(awardsChecked: Value(true)));
+          .write(const MoviesCompanion(awardsChecked: Value(true)));
     } else {
       await (update(shows)..where((s) => s.id.equals(itemId)))
-          .write(ShowsCompanion(awardsChecked: Value(true)));
+          .write(const ShowsCompanion(awardsChecked: Value(true)));
     }
   }
 
