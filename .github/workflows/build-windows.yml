@@ -33,11 +33,14 @@ jobs:
         shell: pwsh
         run: |
           flutter analyze 2>&1 | Tee-Object -FilePath analyze_output.log
+          $exitCode = $LASTEXITCODE
           $errorLines = Select-String -Path analyze_output.log -Pattern "error •" -SimpleMatch
           foreach ($line in $errorLines) {
             Write-Host "::error::$($line.Line)"
           }
-          exit 0
+          if ($exitCode -ne 0) {
+            exit $exitCode
+          }
 
       - name: Build Windows release
         shell: pwsh
