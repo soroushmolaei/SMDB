@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import 'smart_image.dart';
@@ -5,6 +7,7 @@ import 'smart_image.dart';
 class PosterCard extends StatelessWidget {
   final String title;
   final String? posterUrl;
+  final Uint8List? thumbnailBytes;
   final bool watched;
   final VoidCallback onTap;
   final VoidCallback? onToggleWatched;
@@ -13,6 +16,7 @@ class PosterCard extends StatelessWidget {
     super.key,
     required this.title,
     required this.posterUrl,
+    this.thumbnailBytes,
     required this.watched,
     required this.onTap,
     this.onToggleWatched,
@@ -36,6 +40,7 @@ class PosterCard extends StatelessWidget {
                       ? SmartImage(
                           path: posterUrl!,
                           fit: BoxFit.cover,
+                          thumbnailBytes: thumbnailBytes,
                           errorBuilder: (context) => _fallback(),
                         )
                       : _fallback(),

@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:typed_data';
+
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +9,7 @@ import '../database/database.dart';
 import '../services/app_config_service.dart';
 import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
+import '../services/thumbnail_service.dart';
 import '../services/tmdb_service.dart';
 import '../services/wikidata_service.dart';
 import '../theme/app_theme.dart';
@@ -360,6 +364,8 @@ class ScanController extends StateNotifier<ScanState> {
   final AppDatabase db;
   final Ref ref;
   int _tmdbConsecutiveFailures = 0;
+  int _thumbnailConsecutiveFailures = 0;
+  static const _thumbnailCircuitBreakerThreshold = 3;
   static const _tmdbCircuitBreakerThreshold = 3;
 
   ScanController(this.db, this.ref) : super(const ScanState());
@@ -466,6 +472,7 @@ class ScanController extends StateNotifier<ScanState> {
         } catch (_) {
           // Credits are a nice-to-have; don't fail the whole item over it.
         }
+        unawaited(_saveMovieThumbnails(movieId, match));
         state = state.copyWith(matched: state.matched + 1);
       }
 
@@ -589,6 +596,55 @@ class ScanController extends StateNotifier<ScanState> {
     );
   }
 
+  /// Downloads a small local copy of the poster/backdrop in the background
+  /// so it still shows with no internet. Never awaited by callers — must
+  /// not slow down scanning, and must never throw.
+  Future<void> _saveMovieThumbnails(int movieId, _MovieMatch match) async {
+    if (_thumbnailConsecutiveFailures >= _thumbnailCircuitBreakerThreshold) {
+      return;
+    }
+    if (match.posterPath == null && match.backdropPath == null) return;
+    final results = await Future.wait([
+      ThumbnailService.fetch(match.posterPath),
+      ThumbnailService.fetch(match.backdropPath),
+    ]);
+    final poster = results[0];
+    final backdrop = results[1];
+    if (poster == null && backdrop == null) {
+      _thumbnailConsecutiveFailures++;
+      return;
+    }
+    _thumbnailConsecutiveFailures = 0;
+    try {
+      await db.updateMovieThumbnails(movieId, poster: poster, backdrop: backdrop);
+    } catch (_) {
+      // Nice-to-have; never let this surface as a scan error.
+    }
+  }
+
+  Future<void> _saveShowThumbnails(int showId, _ShowMatch match) async {
+    if (_thumbnailConsecutiveFailures >= _thumbnailCircuitBreakerThreshold) {
+      return;
+    }
+    if (match.posterPath == null && match.backdropPath == null) return;
+    final results = await Future.wait([
+      ThumbnailService.fetch(match.posterPath),
+      ThumbnailService.fetch(match.backdropPath),
+    ]);
+    final poster = results[0];
+    final backdrop = results[1];
+    if (poster == null && backdrop == null) {
+      _thumbnailConsecutiveFailures++;
+      return;
+    }
+    _thumbnailConsecutiveFailures = 0;
+    try {
+      await db.updateShowThumbnails(showId, poster: poster, backdrop: backdrop);
+    } catch (_) {
+      // Nice-to-have; never let this surface as a scan error.
+    }
+  }
+
   Future<void> scanShowFolder(String path) async {
     final tmdb = ref.read(tmdbServiceProvider);
     final omdb = ref.read(omdbServiceProvider);
@@ -678,6 +734,7 @@ class ScanController extends StateNotifier<ScanState> {
         } catch (_) {
           // Credits are a nice-to-have; don't fail the whole item over it.
         }
+        unawaited(_saveShowThumbnails(showId, match));
 
         final seasonNumbers = show.episodes.map((e) => e.season).toSet();
         final tmdbForEpisodes =
@@ -1030,6 +1087,7 @@ class ScanController extends StateNotifier<ScanState> {
       } catch (_) {
         // Non-fatal.
       }
+      unawaited(_saveMovieThumbnails(movieId, match));
       success = true;
     } else if (trailerPath != movie.trailerFilePath) {
       // Even if no metadata match was found, still save a newly detected
@@ -1106,6 +1164,7 @@ class ScanController extends StateNotifier<ScanState> {
       } catch (_) {
         // Non-fatal.
       }
+      unawaited(_saveShowThumbnails(showId, match));
 
       try {
         final episodes = await db.getEpisodesForShowOnce(showId);
@@ -1137,4 +1196,110 @@ final scanControllerProvider =
     StateNotifierProvider<ScanController, ScanState>((ref) {
   final db = ref.watch(databaseProvider);
   return ScanController(db, ref);
+});
+
+// -----------------------------------------------------------------------
+// Offline thumbnail backfill
+// -----------------------------------------------------------------------
+//
+// One-off job (triggered from Settings) that fetches thumbnails for every
+// movie/show that was already in the library before the offline-thumbnail
+// feature existed. Ongoing scans/rematches pick up their own thumbnails
+// automatically via ScanController; this just catches everything older.
+
+class ThumbnailBackfillState {
+  final bool running;
+  final int total;
+  final int processed;
+  final int downloaded;
+
+  const ThumbnailBackfillState({
+    this.running = false,
+    this.total = 0,
+    this.processed = 0,
+    this.downloaded = 0,
+  });
+
+  ThumbnailBackfillState copyWith({
+    bool? running,
+    int? total,
+    int? processed,
+    int? downloaded,
+  }) {
+    return ThumbnailBackfillState(
+      running: running ?? this.running,
+      total: total ?? this.total,
+      processed: processed ?? this.processed,
+      downloaded: downloaded ?? this.downloaded,
+    );
+  }
+}
+
+class ThumbnailBackfillController extends StateNotifier<ThumbnailBackfillState> {
+  final AppDatabase db;
+
+  ThumbnailBackfillController(this.db) : super(const ThumbnailBackfillState());
+
+  Future<void> run() async {
+    if (state.running) return;
+
+    final movies = await db.getMoviesNeedingThumbnails();
+    final shows = await db.getShowsNeedingThumbnails();
+    state = ThumbnailBackfillState(
+      running: true,
+      total: movies.length + shows.length,
+    );
+
+    for (final movie in movies) {
+      final results = await Future.wait([
+        ThumbnailService.fetch(movie.posterPath),
+        ThumbnailService.fetch(movie.backdropPath),
+      ]);
+      final poster = results[0];
+      final backdrop = results[1];
+      if (poster != null || backdrop != null) {
+        try {
+          await db.updateMovieThumbnails(
+            movie.id,
+            poster: poster,
+            backdrop: backdrop,
+          );
+          state = state.copyWith(downloaded: state.downloaded + 1);
+        } catch (_) {
+          // Nice-to-have; keep going with the rest of the library.
+        }
+      }
+      state = state.copyWith(processed: state.processed + 1);
+    }
+
+    for (final show in shows) {
+      final results = await Future.wait([
+        ThumbnailService.fetch(show.posterPath),
+        ThumbnailService.fetch(show.backdropPath),
+      ]);
+      final poster = results[0];
+      final backdrop = results[1];
+      if (poster != null || backdrop != null) {
+        try {
+          await db.updateShowThumbnails(
+            show.id,
+            poster: poster,
+            backdrop: backdrop,
+          );
+          state = state.copyWith(downloaded: state.downloaded + 1);
+        } catch (_) {
+          // Nice-to-have; keep going with the rest of the library.
+        }
+      }
+      state = state.copyWith(processed: state.processed + 1);
+    }
+
+    state = state.copyWith(running: false);
+  }
+}
+
+final thumbnailBackfillProvider = StateNotifierProvider<
+    ThumbnailBackfillController, ThumbnailBackfillState>((ref) {
+  final db = ref.watch(databaseProvider);
+  return ThumbnailBackfillController(db);
 });

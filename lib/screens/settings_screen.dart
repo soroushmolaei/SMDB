@@ -311,6 +311,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final settingsAsync = ref.watch(appSettingsProvider);
     final foldersAsync = ref.watch(foldersStreamProvider);
     final dbPathAsync = ref.watch(databasePathProvider);
+    final thumbnailBackfill = ref.watch(thumbnailBackfillProvider);
     final scanState = ref.watch(scanControllerProvider);
     final isScanning = scanState.status == ScanStatus.scanning ||
         scanState.status == ScanStatus.matching;
@@ -585,6 +586,56 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     onPressed: _movingDb ? null : _resetDatabaseLocation,
                     child: const Text('Use Default'),
                   ),
+                ],
+              ),
+              const SizedBox(height: 32),
+              const Text(
+                'Offline Thumbnails',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Movies/shows you scan or update from now on automatically '
+                'save a small local copy of their poster/backdrop, so they '
+                'keep showing up with no internet connection. Use this to '
+                'backfill titles that were already in your library before.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: thumbnailBackfill.running
+                        ? null
+                        : () => ref
+                            .read(thumbnailBackfillProvider.notifier)
+                            .run(),
+                    icon: thumbnailBackfill.running
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.download_outlined, size: 16),
+                    label: Text(
+                      thumbnailBackfill.running
+                          ? 'Downloading ${thumbnailBackfill.processed}/'
+                              '${thumbnailBackfill.total}...'
+                          : 'Download Missing Thumbnails',
+                    ),
+                  ),
+                  if (!thumbnailBackfill.running &&
+                      thumbnailBackfill.processed > 0) ...[
+                    const SizedBox(width: 12),
+                    Text(
+                      'Saved ${thumbnailBackfill.downloaded} of '
+                      '${thumbnailBackfill.processed}.',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
                 ],
               ),
               const SizedBox(height: 32),

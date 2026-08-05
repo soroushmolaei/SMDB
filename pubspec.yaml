@@ -24,6 +24,7 @@ dependencies:
   # Networking & images
   http: ^1.2.2
   cached_network_image: ^3.4.1
+  image: any
 
   # Folder/file picking (desktop)
   file_picker: ^8.3.7

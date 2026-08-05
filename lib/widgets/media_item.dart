@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 /// A unified, display-ready representation of either a movie or a show,
@@ -10,6 +12,7 @@ class MediaItem {
   final String title;
   final int? year;
   final String? posterPath;
+  final Uint8List? posterThumbnail;
   final double? rating;
   final String? genres;
   final bool watched;
@@ -23,6 +26,7 @@ class MediaItem {
     required this.title,
     required this.year,
     required this.posterPath,
+    this.posterThumbnail,
     required this.rating,
     required this.genres,
     required this.watched,

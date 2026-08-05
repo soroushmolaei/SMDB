@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +53,8 @@ class MovieDetailScreen extends ConsumerWidget {
                       rating: movie.rating,
                       backdropUrl: backdropUrl,
                       posterUrl: posterUrl,
+                      backdropThumbnail: movie.backdropThumbnail,
+                      posterThumbnail: movie.posterThumbnail,
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -461,6 +465,8 @@ class _MovieHero extends StatelessWidget {
   final double? rating;
   final String? backdropUrl;
   final String? posterUrl;
+  final Uint8List? backdropThumbnail;
+  final Uint8List? posterThumbnail;
 
   const _MovieHero({
     required this.title,
@@ -470,6 +476,8 @@ class _MovieHero extends StatelessWidget {
     required this.rating,
     required this.backdropUrl,
     required this.posterUrl,
+    required this.backdropThumbnail,
+    required this.posterThumbnail,
   });
 
   @override
@@ -488,6 +496,7 @@ class _MovieHero extends StatelessWidget {
                 ? SmartImage(
                     path: backdropUrl!,
                     fit: BoxFit.cover,
+                    thumbnailBytes: backdropThumbnail,
                     errorBuilder: (c) => Container(color: Colors.black),
                   )
                 : Container(color: Colors.black),
@@ -533,7 +542,11 @@ class _MovieHero extends StatelessWidget {
                           ],
                         ),
                         child: posterUrl != null
-                            ? SmartImage(path: posterUrl!, fit: BoxFit.cover)
+                            ? SmartImage(
+                                path: posterUrl!,
+                                fit: BoxFit.cover,
+                                thumbnailBytes: posterThumbnail,
+                              )
                             : Container(color: Colors.white10),
                       ),
                     ),

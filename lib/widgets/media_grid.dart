@@ -203,6 +203,7 @@ class MediaItemView extends StatelessWidget {
         return PosterCard(
           title: item.title,
           posterUrl: item.posterPath,
+          thumbnailBytes: item.posterThumbnail,
           watched: item.watched,
           onTap: item.onTap,
         );

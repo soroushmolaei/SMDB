@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -34,8 +35,8 @@ class Movies extends Table {
   TextColumn get overview => text().nullable()();
   TextColumn get posterPath => text().nullable()();
   TextColumn get backdropPath => text().nullable()();
-  RealColumn get rating => real().nullable()();
-  IntColumn get runtimeMinutes => integer().nullable()();
+  BlobColumn get posterThumbnail => blob().nullable()();
+  BlobColumn get backdropThumbnail => blob().nullable()();
   TextColumn get genres => text().nullable()(); // comma separated
   TextColumn get contentRating => text().nullable()(); // e.g. PG-13, R
   TextColumn get director => text().nullable()();
@@ -63,6 +64,8 @@ class Shows extends Table {
   TextColumn get overview => text().nullable()();
   TextColumn get posterPath => text().nullable()();
   TextColumn get backdropPath => text().nullable()();
+  BlobColumn get posterThumbnail => blob().nullable()();
+  BlobColumn get backdropThumbnail => blob().nullable()();
   RealColumn get rating => real().nullable()();
   TextColumn get genres => text().nullable()();
   TextColumn get contentRating => text().nullable()(); // e.g. TV-14, TV-MA
@@ -222,7 +225,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 10;
+  int get schemaVersion => 11;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -271,6 +274,12 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(awards);
             await m.addColumn(movies, movies.awardsChecked);
             await m.addColumn(shows, shows.awardsChecked);
+          }
+          if (from < 11) {
+            await m.addColumn(movies, movies.posterThumbnail);
+            await m.addColumn(movies, movies.backdropThumbnail);
+            await m.addColumn(shows, shows.posterThumbnail);
+            await m.addColumn(shows, shows.backdropThumbnail);
           }
         },
       );
@@ -721,6 +730,63 @@ class AppDatabase extends _$AppDatabase {
       await (update(shows)..where((s) => s.id.equals(itemId)))
           .write(const ShowsCompanion(awardsChecked: Value(true)));
     }
+  }
+
+  // --- Offline thumbnails ---------------------------------------------------
+  //
+  // Small JPEG-compressed copies of the poster/backdrop, stored directly in
+  // this database file so they still display with no internet connection.
+  // Only the columns that were actually fetched get written (the other
+  // stays untouched) so a failed fetch never wipes out a thumbnail saved
+  // earlier.
+
+  Future<void> updateMovieThumbnails(
+    int id, {
+    Uint8List? poster,
+    Uint8List? backdrop,
+  }) async {
+    await (update(movies)..where((m) => m.id.equals(id))).write(
+      MoviesCompanion(
+        posterThumbnail:
+            poster != null ? Value(poster) : const Value.absent(),
+        backdropThumbnail:
+            backdrop != null ? Value(backdrop) : const Value.absent(),
+      ),
+    );
+  }
+
+  Future<void> updateShowThumbnails(
+    int id, {
+    Uint8List? poster,
+    Uint8List? backdrop,
+  }) async {
+    await (update(shows)..where((s) => s.id.equals(id))).write(
+      ShowsCompanion(
+        posterThumbnail:
+            poster != null ? Value(poster) : const Value.absent(),
+        backdropThumbnail:
+            backdrop != null ? Value(backdrop) : const Value.absent(),
+      ),
+    );
+  }
+
+  /// Movies that have a poster/backdrop URL or file but no locally-stored
+  /// thumbnail for it yet — used to backfill the existing library after
+  /// this feature was added.
+  Future<List<Movie>> getMoviesNeedingThumbnails() {
+    return (select(movies)
+          ..where((m) =>
+              (m.posterPath.isNotNull() & m.posterThumbnail.isNull()) |
+              (m.backdropPath.isNotNull() & m.backdropThumbnail.isNull())))
+        .get();
+  }
+
+  Future<List<Show>> getShowsNeedingThumbnails() {
+    return (select(shows)
+          ..where((s) =>
+              (s.posterPath.isNotNull() & s.posterThumbnail.isNull()) |
+              (s.backdropPath.isNotNull() & s.backdropThumbnail.isNull())))
+        .get();
   }
 
   /// Replaces all awards for a movie/show. Called at most once per item

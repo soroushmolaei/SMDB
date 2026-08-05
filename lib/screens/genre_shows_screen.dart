@@ -46,6 +46,7 @@ class GenreShowsScreen extends ConsumerWidget {
               return PosterCard(
                 title: show.title,
                 posterUrl: show.posterPath,
+                thumbnailBytes: show.posterThumbnail,
                 watched: false,
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
