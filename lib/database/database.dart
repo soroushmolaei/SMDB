@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
@@ -37,6 +36,8 @@ class Movies extends Table {
   TextColumn get backdropPath => text().nullable()();
   BlobColumn get posterThumbnail => blob().nullable()();
   BlobColumn get backdropThumbnail => blob().nullable()();
+  RealColumn get rating => real().nullable()();
+  IntColumn get runtimeMinutes => integer().nullable()();
   TextColumn get genres => text().nullable()(); // comma separated
   TextColumn get contentRating => text().nullable()(); // e.g. PG-13, R
   TextColumn get director => text().nullable()();
