@@ -1,12 +1,12 @@
 import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../providers/providers.dart';
 import '../widgets/awards_section.dart';
+import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/score_badge.dart';
@@ -51,10 +51,25 @@ class MovieDetailScreen extends ConsumerWidget {
                       contentRating: movie.contentRating,
                       runtimeMinutes: movie.runtimeMinutes,
                       rating: movie.rating,
+                      genres: movie.genres,
                       backdropUrl: backdropUrl,
                       posterUrl: posterUrl,
                       backdropThumbnail: movie.backdropThumbnail,
                       posterThumbnail: movie.posterThumbnail,
+                      isFavorite: movie.isFavorite,
+                      watched: movie.watched,
+                      onToggleFavorite: () => ref
+                          .read(databaseProvider)
+                          .setMovieFavorite(movie.id, !movie.isFavorite),
+                      onToggleWatched: () => ref
+                          .read(databaseProvider)
+                          .setMovieWatched(movie.id, !movie.watched),
+                      onAddToGroup: () => showAddToGroupDialog(
+                        context,
+                        ref,
+                        kind: 'movie',
+                        itemId: movie.id,
+                      ),
                     ),
                   ),
                   SliverToBoxAdapter(
@@ -88,38 +103,6 @@ class MovieDetailScreen extends ConsumerWidget {
                                     horizontal: 14, vertical: 8),
                               ),
                             ),
-                          FilledButton.tonalIcon(
-                            onPressed: () => ref
-                                .read(databaseProvider)
-                                .setMovieWatched(movie.id, !movie.watched),
-                            icon: Icon(
-                              movie.watched
-                                  ? Icons.check_circle
-                                  : Icons.check_circle_outline,
-                              size: 18,
-                            ),
-                            label: Text(
-                              movie.watched ? 'Watched' : 'Mark as watched',
-                            ),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
-                            ),
-                          ),
-                          IconButton(
-                            icon: Icon(
-                              movie.isFavorite
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              color:
-                                  movie.isFavorite ? Colors.amber : null,
-                            ),
-                            tooltip: 'Favorite',
-                            onPressed: () => ref
-                                .read(databaseProvider)
-                                .setMovieFavorite(
-                                    movie.id, !movie.isFavorite),
-                          ),
                           if (movie.imdbId != null)
                             IconButton(
                               icon: const Icon(Icons.open_in_new),
@@ -131,16 +114,6 @@ class MovieDetailScreen extends ConsumerWidget {
                                 mode: LaunchMode.externalApplication,
                               ),
                             ),
-                          IconButton(
-                            icon: const Icon(Icons.playlist_add_outlined),
-                            tooltip: 'Add to group',
-                            onPressed: () => showAddToGroupDialog(
-                              context,
-                              ref,
-                              kind: 'movie',
-                              itemId: movie.id,
-                            ),
-                          ),
                         ],
                       ),
                     ),
@@ -200,153 +173,22 @@ class MovieDetailScreen extends ConsumerWidget {
                             .where((c) => c.movieId == movie.id)
                             .toList();
 
-                        if (movieCredits.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
+                        final entries = buildCreditEntries(
+                          credits: movieCredits,
+                          personIdOf: (c) => c.personId,
+                          roleOf: (c) => c.role,
+                          characterOf: (c) => c.character,
+                          nameOf: (id) => peopleById[id]?.name,
+                        );
 
-                        final muted = colorScheme.onSurfaceVariant;
-
-                        Widget roleSection(String title, String role) {
-                          final entries = movieCredits
-                              .where((c) => c.role == role)
-                              .toList();
-                          if (entries.isEmpty) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  title,
-                                  style:
-                                      TextStyle(fontSize: 12, color: muted),
-                                ),
-                                const SizedBox(height: 6),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: entries.map((c) {
-                                    final person = peopleById[c.personId];
-                                    final label = person?.name ?? 'Unknown';
-                                    return ActionChip(
-                                      avatar: CircleAvatar(
-                                        backgroundColor:
-                                            colorScheme.surfaceContainerHighest,
-                                        backgroundImage:
-                                            person?.photoPath != null
-                                                ? CachedNetworkImageProvider(
-                                                    person!.photoPath!)
-                                                : null,
-                                        child: person?.photoPath == null
-                                            ? const Icon(Icons.person,
-                                                size: 14)
-                                            : null,
-                                      ),
-                                      label: Text(
-                                        c.character != null &&
-                                                c.character!.isNotEmpty
-                                            ? '$label (${c.character})'
-                                            : label,
-                                      ),
-                                      onPressed: person == null
-                                          ? null
-                                          : () => Navigator.of(context).push(
-                                                MaterialPageRoute(
-                                                  builder: (_) =>
-                                                      PersonDetailScreen(
-                                                    personId: person.id,
-                                                  ),
-                                                ),
-                                              ),
-                                    );
-                                  }).toList(),
-                                ),
-                              ],
+                        return CreditsGrid(
+                          entries: entries,
+                          onTap: (personId) => Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  PersonDetailScreen(personId: personId),
                             ),
-                          );
-                        }
-
-                        Widget castList() {
-                          final entries = movieCredits
-                              .where((c) => c.role == 'actor')
-                              .toList();
-                          if (entries.isEmpty) return const SizedBox.shrink();
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'CAST',
-                                  style:
-                                      TextStyle(fontSize: 12, color: muted),
-                                ),
-                                const SizedBox(height: 6),
-                                ...entries.map((c) {
-                                  final person = peopleById[c.personId];
-                                  return InkWell(
-                                    onTap: person == null
-                                        ? null
-                                        : () => Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (_) =>
-                                                    PersonDetailScreen(
-                                                  personId: person.id,
-                                                ),
-                                              ),
-                                            ),
-                                    child: Padding(
-                                      padding: const EdgeInsets.symmetric(
-                                          vertical: 6),
-                                      child: Row(
-                                        children: [
-                                          CircleAvatar(
-                                            radius: 16,
-                                            backgroundColor: colorScheme
-                                                .surfaceContainerHighest,
-                                            backgroundImage:
-                                                person?.photoPath != null
-                                                    ? CachedNetworkImageProvider(
-                                                        person!.photoPath!)
-                                                    : null,
-                                            child: person?.photoPath == null
-                                                ? const Icon(Icons.person,
-                                                    size: 14)
-                                                : null,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Text(
-                                              person?.name ?? 'Unknown',
-                                              style: const TextStyle(
-                                                  fontWeight:
-                                                      FontWeight.w500),
-                                            ),
-                                          ),
-                                          Expanded(
-                                            child: Text(
-                                              c.character ?? '',
-                                              style: TextStyle(color: muted),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            roleSection('DIRECTOR', 'director'),
-                            roleSection('WRITER', 'writer'),
-                            castList(),
-                            const SizedBox(height: 8),
-                          ],
+                          ),
                         );
                       },
                     ),
@@ -463,10 +305,16 @@ class _MovieHero extends StatelessWidget {
   final String? contentRating;
   final int? runtimeMinutes;
   final double? rating;
+  final String? genres;
   final String? backdropUrl;
   final String? posterUrl;
   final Uint8List? backdropThumbnail;
   final Uint8List? posterThumbnail;
+  final bool isFavorite;
+  final bool watched;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onToggleWatched;
+  final VoidCallback onAddToGroup;
 
   const _MovieHero({
     required this.title,
@@ -474,16 +322,22 @@ class _MovieHero extends StatelessWidget {
     required this.contentRating,
     required this.runtimeMinutes,
     required this.rating,
+    required this.genres,
     required this.backdropUrl,
     required this.posterUrl,
     required this.backdropThumbnail,
     required this.posterThumbnail,
+    required this.isFavorite,
+    required this.watched,
+    required this.onToggleFavorite,
+    required this.onToggleWatched,
+    required this.onAddToGroup,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 400,
+      height: 440,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -506,136 +360,184 @@ class _MovieHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: const [0.0, 0.5, 1.0],
+                stops: const [0.0, 0.35, 0.75, 1.0],
                 colors: [
-                  Colors.black.withValues(alpha: 0.15),
-                  Colors.black.withValues(alpha: 0.45),
-                  Colors.black.withValues(alpha: 0.96),
+                  Colors.black.withValues(alpha: 0.2),
+                  Colors.black.withValues(alpha: 0.35),
+                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black,
                 ],
               ),
             ),
           ),
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  GestureDetector(
-                    onTap: () =>
-                        FullscreenImageViewer.show(context, posterUrl),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 110,
-                        height: 165,
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: posterUrl != null
-                            ? SmartImage(
-                                path: posterUrl!,
-                                fit: BoxFit.cover,
-                                thumbnailBytes: posterThumbnail,
-                              )
-                            : Container(color: Colors.white10),
+            left: 16,
+            right: 16,
+            top: 64,
+            bottom: 20,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () =>
+                      FullscreenImageViewer.show(context, posterUrl),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 130,
+                      height: 195,
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
+                      child: posterUrl != null
+                          ? SmartImage(
+                              path: posterUrl!,
+                              fit: BoxFit.cover,
+                              thumbnailBytes: posterThumbnail,
+                            )
+                          : Container(color: Colors.white10),
                     ),
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      RichText(
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        text: TextSpan(
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             height: 1.15,
                           ),
+                          children: [
+                            TextSpan(text: title),
+                            if (year != null)
+                              TextSpan(
+                                text: ' ($year)',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w400,
+                                  color: Colors.white70,
+                                ),
+                              ),
+                          ],
                         ),
-                        if (year != null ||
-                            contentRating != null ||
-                            runtimeMinutes != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              children: [
-                                if (contentRating != null &&
-                                    contentRating!.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 5, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                          color: Colors.white54),
-                                      borderRadius:
-                                          BorderRadius.circular(3),
-                                    ),
-                                    child: Text(
-                                      contentRating!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
+                      ),
+                      if (contentRating != null ||
+                          genres != null ||
+                          runtimeMinutes != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (contentRating != null &&
+                                  contentRating!.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.white54),
+                                    borderRadius: BorderRadius.circular(3),
                                   ),
-                                Text(
-                                  [
-                                    if (year != null) '$year',
-                                    if (runtimeMinutes != null)
-                                      '${runtimeMinutes! ~/ 60}h '
-                                          '${runtimeMinutes! % 60}m',
-                                  ].join('  •  '),
-                                  style: const TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 13,
+                                  child: Text(
+                                    contentRating!,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          ),
-                        if (rating != null && rating! > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Row(
-                              children: [
-                                ScoreBadge(rating: rating, size: 40),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'User\nScore',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 11,
-                                    height: 1.1,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+                              Text(
+                                [
+                                  if (genres != null && genres!.isNotEmpty)
+                                    genres!
+                                        .split(',')
+                                        .map((g) => g.trim())
+                                        .where((g) => g.isNotEmpty)
+                                        .join(', '),
+                                  if (runtimeMinutes != null)
+                                    '${runtimeMinutes! ~/ 60}h '
+                                        '${runtimeMinutes! % 60}m',
+                                ].join('  •  '),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
                                 ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                      ],
-                    ),
+                        ),
+                      if (rating != null && rating! > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Row(
+                            children: [
+                              ScoreBadge(rating: rating, size: 40),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'User\nScore',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          children: [
+                            HeroIconButton(
+                              icon: Icon(
+                                isFavorite ? Icons.star : Icons.star_border,
+                                color: isFavorite ? Colors.amber : null,
+                              ),
+                              tooltip: 'Favorite',
+                              onPressed: onToggleFavorite,
+                            ),
+                            HeroIconButton(
+                              icon: Icon(
+                                watched
+                                    ? Icons.check_circle
+                                    : Icons.check_circle_outline,
+                              ),
+                              tooltip: watched
+                                  ? 'Watched'
+                                  : 'Mark as watched',
+                              onPressed: onToggleWatched,
+                            ),
+                            HeroIconButton(
+                              icon: const Icon(
+                                  Icons.playlist_add_outlined),
+                              tooltip: 'Add to group',
+                              onPressed: onAddToGroup,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],

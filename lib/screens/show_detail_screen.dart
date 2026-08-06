@@ -8,6 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../widgets/awards_section.dart';
+import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/score_badge.dart';
@@ -61,57 +62,50 @@ class ShowDetailScreen extends ConsumerWidget {
                       contentRating: show.contentRating,
                       status: show.status,
                       rating: show.rating,
+                      genres: show.genres,
                       backdropUrl: show.backdropPath,
                       posterUrl: show.posterPath,
                       backdropThumbnail: show.backdropThumbnail,
                       posterThumbnail: show.posterThumbnail,
+                      isFavorite: show.isFavorite,
+                      onToggleFavorite: () => ref
+                          .read(databaseProvider)
+                          .setShowFavorite(show.id, !show.isFavorite),
+                      onAddToGroup: () => showAddToGroupDialog(
+                        context,
+                        ref,
+                        kind: 'show',
+                        itemId: show.id,
+                      ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              show.isFavorite
-                                  ? Icons.star
-                                  : Icons.star_border,
-                              color: show.isFavorite ? Colors.amber : null,
-                            ),
-                            tooltip: 'Favorite',
-                            onPressed: () => ref
-                                .read(databaseProvider)
-                                .setShowFavorite(show.id, !show.isFavorite),
-                          ),
-                          if (show.imdbId != null)
-                            IconButton(
-                              icon: const Icon(Icons.open_in_new),
-                              tooltip: 'Open on IMDb',
+                  if (show.imdbId != null)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                        child: Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            OutlinedButton.icon(
                               onPressed: () => launchUrl(
                                 Uri.parse(
                                   'https://www.imdb.com/title/${show.imdbId}/',
                                 ),
                                 mode: LaunchMode.externalApplication,
                               ),
+                              icon: const Icon(Icons.open_in_new, size: 18),
+                              label: const Text('Open on IMDb'),
+                              style: OutlinedButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 14, vertical: 8),
+                              ),
                             ),
-                          IconButton(
-                            icon: const Icon(Icons.playlist_add_outlined),
-                            tooltip: 'Add to group',
-                            onPressed: () => showAddToGroupDialog(
-                              context,
-                              ref,
-                              kind: 'show',
-                              itemId: show.id,
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                   if (show.genres != null && show.genres!.isNotEmpty)
                     SliverToBoxAdapter(
                       child: Padding(
@@ -155,9 +149,20 @@ class ShowDetailScreen extends ConsumerWidget {
                     ),
                   if (showCredits.isNotEmpty)
                     SliverToBoxAdapter(
-                      child: _CreditsSection(
-                        credits: showCredits,
-                        peopleById: peopleById,
+                      child: CreditsGrid(
+                        entries: buildCreditEntries(
+                          credits: showCredits,
+                          personIdOf: (c) => c.personId,
+                          roleOf: (c) => c.role,
+                          characterOf: (c) => c.character,
+                          nameOf: (id) => peopleById[id]?.name,
+                        ),
+                        onTap: (personId) => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PersonDetailScreen(personId: personId),
+                          ),
+                        ),
                       ),
                     ),
                   SliverToBoxAdapter(
@@ -310,26 +315,34 @@ class _ShowHero extends StatelessWidget {
   final String? contentRating;
   final String? status;
   final double? rating;
+  final String? genres;
   final String? backdropUrl;
   final String? posterUrl;
   final Uint8List? backdropThumbnail;
   final Uint8List? posterThumbnail;
+  final bool isFavorite;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onAddToGroup;
 
   const _ShowHero({
     required this.title,
     required this.contentRating,
     required this.status,
     required this.rating,
+    required this.genres,
     required this.backdropUrl,
     required this.posterUrl,
     required this.backdropThumbnail,
     required this.posterThumbnail,
+    required this.isFavorite,
+    required this.onToggleFavorite,
+    required this.onAddToGroup,
   });
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: 400,
+      height: 440,
       child: Stack(
         fit: StackFit.expand,
         children: [
@@ -352,267 +365,164 @@ class _ShowHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: const [0.0, 0.5, 1.0],
+                stops: const [0.0, 0.35, 0.75, 1.0],
                 colors: [
-                  Colors.black.withValues(alpha: 0.15),
-                  Colors.black.withValues(alpha: 0.45),
-                  Colors.black.withValues(alpha: 0.96),
+                  Colors.black.withValues(alpha: 0.2),
+                  Colors.black.withValues(alpha: 0.35),
+                  Colors.black.withValues(alpha: 0.8),
+                  Colors.black,
                 ],
               ),
             ),
           ),
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  GestureDetector(
-                    onTap: () =>
-                        FullscreenImageViewer.show(context, posterUrl),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Container(
-                        width: 110,
-                        height: 165,
-                        decoration: BoxDecoration(
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withValues(alpha: 0.5),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+            left: 16,
+            right: 16,
+            top: 64,
+            bottom: 20,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                GestureDetector(
+                  onTap: () =>
+                      FullscreenImageViewer.show(context, posterUrl),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      width: 130,
+                      height: 195,
+                      decoration: BoxDecoration(
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withValues(alpha: 0.5),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: posterUrl != null
+                          ? SmartImage(
+                              path: posterUrl!,
+                              fit: BoxFit.cover,
+                              thumbnailBytes: posterThumbnail,
+                            )
+                          : Container(color: Colors.white10),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                          height: 1.15,
+                        ),
+                      ),
+                      if (contentRating != null ||
+                          genres != null ||
+                          status != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
+                            children: [
+                              if (contentRating != null &&
+                                  contentRating!.isNotEmpty)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 5, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    border:
+                                        Border.all(color: Colors.white54),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                  child: Text(
+                                    contentRating!,
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              Text(
+                                [
+                                  if (genres != null && genres!.isNotEmpty)
+                                    genres!
+                                        .split(',')
+                                        .map((g) => g.trim())
+                                        .where((g) => g.isNotEmpty)
+                                        .join(', '),
+                                  if (status != null && status!.isNotEmpty)
+                                    status!,
+                                ].join('  •  '),
+                                style: const TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (rating != null && rating! > 0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 14),
+                          child: Row(
+                            children: [
+                              ScoreBadge(rating: rating, size: 40),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'User\nScore',
+                                style: TextStyle(
+                                  color: Colors.white70,
+                                  fontSize: 11,
+                                  height: 1.1,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 10),
+                        child: Row(
+                          children: [
+                            HeroIconButton(
+                              icon: Icon(
+                                isFavorite ? Icons.star : Icons.star_border,
+                                color: isFavorite ? Colors.amber : null,
+                              ),
+                              tooltip: 'Favorite',
+                              onPressed: onToggleFavorite,
+                            ),
+                            HeroIconButton(
+                              icon: const Icon(
+                                  Icons.playlist_add_outlined),
+                              tooltip: 'Add to group',
+                              onPressed: onAddToGroup,
                             ),
                           ],
                         ),
-                        child: posterUrl != null
-                            ? SmartImage(
-                                path: posterUrl!,
-                                fit: BoxFit.cover,
-                                thumbnailBytes: posterThumbnail,
-                              )
-                            : Container(color: Colors.white10),
                       ),
-                    ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                            height: 1.15,
-                          ),
-                        ),
-                        if (contentRating != null || status != null)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 6),
-                            child: Wrap(
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              spacing: 8,
-                              children: [
-                                if (contentRating != null &&
-                                    contentRating!.isNotEmpty)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(
-                                        horizontal: 5, vertical: 1),
-                                    decoration: BoxDecoration(
-                                      border: Border.all(
-                                          color: Colors.white54),
-                                      borderRadius:
-                                          BorderRadius.circular(3),
-                                    ),
-                                    child: Text(
-                                      contentRating!,
-                                      style: const TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ),
-                                if (status != null && status!.isNotEmpty)
-                                  Text(
-                                    status!,
-                                    style: const TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 13,
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          ),
-                        if (rating != null && rating! > 0)
-                          Padding(
-                            padding: const EdgeInsets.only(top: 12),
-                            child: Row(
-                              children: [
-                                ScoreBadge(rating: rating, size: 40),
-                                const SizedBox(width: 8),
-                                const Text(
-                                  'User\nScore',
-                                  style: TextStyle(
-                                    color: Colors.white70,
-                                    fontSize: 11,
-                                    height: 1.1,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
-    );
-  }
-}
-
-class _CreditsSection extends StatelessWidget {
-  final List<ShowCredit> credits;
-  final Map<int, Person> peopleById;
-  const _CreditsSection({required this.credits, required this.peopleById});
-
-  Widget _roleSection(BuildContext context, String title, String role) {
-    final entries = credits.where((c) => c.role == role).toList();
-    if (entries.isEmpty) return const SizedBox.shrink();
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            title,
-            style: TextStyle(fontSize: 12, color: muted),
-          ),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: entries.map((c) {
-              final person = peopleById[c.personId];
-              final label = person?.name ?? 'Unknown';
-              return ActionChip(
-                avatar: CircleAvatar(
-                  backgroundColor: surfaceVariant,
-                  backgroundImage: person?.photoPath != null
-                      ? CachedNetworkImageProvider(person!.photoPath!)
-                      : null,
-                  child: person?.photoPath == null
-                      ? const Icon(Icons.person, size: 14)
-                      : null,
-                ),
-                label: Text(
-                  c.character != null && c.character!.isNotEmpty
-                      ? '$label (${c.character})'
-                      : label,
-                ),
-                onPressed: person == null
-                    ? null
-                    : () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                PersonDetailScreen(personId: person.id),
-                          ),
-                        ),
-              );
-            }).toList(),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _castList(BuildContext context) {
-    final entries = credits.where((c) => c.role == 'actor').toList();
-    if (entries.isEmpty) return const SizedBox.shrink();
-    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
-    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'CAST',
-            style: TextStyle(fontSize: 12, color: muted),
-          ),
-          const SizedBox(height: 6),
-          ...entries.map((c) {
-            final person = peopleById[c.personId];
-            return InkWell(
-              onTap: person == null
-                  ? null
-                  : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              PersonDetailScreen(personId: person.id),
-                        ),
-                      ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    CircleAvatar(
-                      radius: 16,
-                      backgroundColor: surfaceVariant,
-                      backgroundImage: person?.photoPath != null
-                          ? CachedNetworkImageProvider(person!.photoPath!)
-                          : null,
-                      child: person?.photoPath == null
-                          ? const Icon(Icons.person, size: 14)
-                          : null,
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Text(
-                        person?.name ?? 'Unknown',
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    ),
-                    Expanded(
-                      child: Text(
-                        c.character ?? '',
-                        style: TextStyle(color: muted),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            );
-          }),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _roleSection(context, 'CREATOR', 'creator'),
-        _castList(context),
-        const SizedBox(height: 8),
-      ],
     );
   }
 }
