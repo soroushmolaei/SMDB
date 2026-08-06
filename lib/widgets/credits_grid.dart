@@ -2,10 +2,8 @@ import 'package:flutter/material.dart';
 
 import 'smart_image.dart';
 
-/// One person's entry in a [CreditsGrid] — their name plus a combined
-/// label of every role they held (e.g. a person who both wrote and
-/// appeared in a movie shows as "Brenda, Writer" in one entry, rather
-/// than appearing twice in separate cast/crew sections).
+/// One person's entry in a [CreditsGrid] — their name plus a label
+/// (their character for cast entries, or their role for crew).
 class CreditEntry {
   final int? personId;
   final String name;
@@ -20,9 +18,46 @@ class CreditEntry {
   });
 }
 
+/// A labelled section (e.g. "DIRECTOR", "WRITER", "CAST") containing a
+/// [CreditsGrid]. Renders nothing if [entries] is empty, so sections can
+/// be stacked unconditionally and empty ones just disappear.
+class CreditsSection extends StatelessWidget {
+  final String title;
+  final List<CreditEntry> entries;
+  final void Function(int personId) onTap;
+
+  const CreditsSection({
+    super.key,
+    required this.title,
+    required this.entries,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (entries.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: Text(
+            title,
+            style: TextStyle(
+              fontSize: 12,
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+        CreditsGrid(entries: entries, onTap: onTap),
+      ],
+    );
+  }
+}
+
 /// TMDB-style top-billed grid: avatar, bold name, muted role underneath,
-/// three per row, ordered by billing (first credit appearance in the
-/// source list). Used below the hero on movie/show detail pages.
+/// three per row. Used below the hero on movie/show detail pages, one
+/// per role via [CreditsSection].
 class CreditsGrid extends StatelessWidget {
   final List<CreditEntry> entries;
   final void Function(int personId) onTap;
@@ -35,7 +70,7 @@ class CreditsGrid extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: GridView.builder(
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
@@ -107,56 +142,31 @@ class CreditsGrid extends StatelessWidget {
   }
 }
 
-/// Groups movie/show credits by person, combining every role a person
-/// held into one entry (e.g. actor + writer -> "Brenda, Writer"),
-/// preserving first-appearance order from [credits].
-List<CreditEntry> buildCreditEntries<C>({
+/// Builds one [CreditEntry] per person for a single role's credits
+/// (e.g. just the 'director' rows, or just the 'actor' rows) — a person
+/// already seen in this subset isn't repeated. [labelOf] supplies the
+/// second line (a character name for cast, or a fixed role name like
+/// "Director" for crew).
+List<CreditEntry> buildRoleEntries<C>({
   required Iterable<C> credits,
   required int Function(C) personIdOf,
-  required String Function(C) roleOf,
-  required String? Function(C) characterOf,
+  required String Function(C) labelOf,
   required String? Function(int personId) nameOf,
   required String? Function(int personId) photoPathOf,
 }) {
-  final order = <int>[];
-  final labelsByPerson = <int, List<String>>{};
-
+  final seen = <int>{};
+  final entries = <CreditEntry>[];
   for (final c in credits) {
     final personId = personIdOf(c);
-    if (nameOf(personId) == null) continue;
-    if (!labelsByPerson.containsKey(personId)) {
-      order.add(personId);
-      labelsByPerson[personId] = [];
-    }
-    final role = roleOf(c);
-    final character = characterOf(c);
-    switch (role) {
-      case 'actor':
-        labelsByPerson[personId]!
-            .add(character != null && character.isNotEmpty
-                ? character
-                : 'Actor');
-        break;
-      case 'director':
-        labelsByPerson[personId]!.add('Director');
-        break;
-      case 'writer':
-        labelsByPerson[personId]!.add('Writer');
-        break;
-      case 'creator':
-        labelsByPerson[personId]!.add('Creator');
-        break;
-      default:
-        labelsByPerson[personId]!.add(role);
-    }
+    final name = nameOf(personId);
+    if (name == null || seen.contains(personId)) continue;
+    seen.add(personId);
+    entries.add(CreditEntry(
+      personId: personId,
+      name: name,
+      roleLabel: labelOf(c),
+      photoPath: photoPathOf(personId),
+    ));
   }
-
-  return order
-      .map((id) => CreditEntry(
-            personId: id,
-            name: nameOf(id)!,
-            roleLabel: labelsByPerson[id]!.join(', '),
-            photoPath: photoPathOf(id),
-          ))
-      .toList();
+  return entries;
 }

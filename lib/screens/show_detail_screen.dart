@@ -149,22 +149,51 @@ class ShowDetailScreen extends ConsumerWidget {
                     ),
                   if (showCredits.isNotEmpty)
                     SliverToBoxAdapter(
-                      child: CreditsGrid(
-                        entries: buildCreditEntries(
-                          credits: showCredits,
+                      child: Builder(builder: (context) {
+                        void onTap(int personId) =>
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    PersonDetailScreen(personId: personId),
+                              ),
+                            );
+
+                        final creators = buildRoleEntries(
+                          credits:
+                              showCredits.where((c) => c.role == 'creator'),
                           personIdOf: (c) => c.personId,
-                          roleOf: (c) => c.role,
-                          characterOf: (c) => c.character,
+                          labelOf: (c) => 'Creator',
                           nameOf: (id) => peopleById[id]?.name,
                           photoPathOf: (id) => peopleById[id]?.photoPath,
-                        ),
-                        onTap: (personId) => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) =>
-                                PersonDetailScreen(personId: personId),
-                          ),
-                        ),
-                      ),
+                        );
+                        final cast = buildRoleEntries(
+                          credits:
+                              showCredits.where((c) => c.role == 'actor'),
+                          personIdOf: (c) => c.personId,
+                          labelOf: (c) => c.character != null &&
+                                  c.character!.isNotEmpty
+                              ? c.character!
+                              : 'Actor',
+                          nameOf: (id) => peopleById[id]?.name,
+                          photoPathOf: (id) => peopleById[id]?.photoPath,
+                        );
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CreditsSection(
+                              title: 'CREATOR',
+                              entries: creators,
+                              onTap: onTap,
+                            ),
+                            CreditsSection(
+                              title: 'CAST',
+                              entries: cast,
+                              onTap: onTap,
+                            ),
+                          ],
+                        );
+                      }),
                     ),
                   SliverToBoxAdapter(
                     child: AwardsSection(
@@ -366,12 +395,11 @@ class _ShowHero extends StatelessWidget {
               gradient: LinearGradient(
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
-                stops: const [0.0, 0.35, 0.75, 1.0],
+                stops: const [0.0, 0.5, 1.0],
                 colors: [
-                  Colors.black.withValues(alpha: 0.2),
-                  Colors.black.withValues(alpha: 0.35),
-                  Colors.black.withValues(alpha: 0.8),
-                  Colors.black,
+                  Colors.black.withValues(alpha: 0.55),
+                  Colors.black.withValues(alpha: 0.6),
+                  Colors.black.withValues(alpha: 0.92),
                 ],
               ),
             ),
@@ -379,15 +407,16 @@ class _ShowHero extends StatelessWidget {
           Positioned(
             left: 16,
             right: 16,
-            top: 64,
-            bottom: 20,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                GestureDetector(
-                  onTap: () =>
-                      FullscreenImageViewer.show(context, posterUrl),
-                  child: ClipRRect(
+            top: 40,
+            bottom: 40,
+            child: Center(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  GestureDetector(
+                    onTap: () =>
+                        FullscreenImageViewer.show(context, posterUrl),
+                    child: ClipRRect(
                     borderRadius: BorderRadius.circular(8),
                     child: Container(
                       width: 130,
@@ -520,6 +549,7 @@ class _ShowHero extends StatelessWidget {
                   ),
                 ),
               ],
+            ),
             ),
           ),
         ],
