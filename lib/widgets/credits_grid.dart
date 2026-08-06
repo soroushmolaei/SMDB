@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'smart_image.dart';
+
 /// One person's entry in a [CreditsGrid] — their name plus a combined
 /// label of every role they held (e.g. a person who both wrote and
 /// appeared in a movie shows as "Brenda, Writer" in one entry, rather
@@ -8,17 +10,19 @@ class CreditEntry {
   final int? personId;
   final String name;
   final String roleLabel;
+  final String? photoPath;
 
   const CreditEntry({
     required this.personId,
     required this.name,
     required this.roleLabel,
+    this.photoPath,
   });
 }
 
-/// TMDB-style top-billed grid: bold name, muted role underneath, three
-/// per row, ordered by billing (first credit appearance in the source
-/// list). Used below the hero on movie/show detail pages.
+/// TMDB-style top-billed grid: avatar, bold name, muted role underneath,
+/// three per row, ordered by billing (first credit appearance in the
+/// source list). Used below the hero on movie/show detail pages.
 class CreditsGrid extends StatelessWidget {
   final List<CreditEntry> entries;
   final void Function(int personId) onTap;
@@ -39,38 +43,59 @@ class CreditsGrid extends StatelessWidget {
           crossAxisCount: 3,
           crossAxisSpacing: 16,
           mainAxisSpacing: 14,
-          childAspectRatio: 3.6,
+          childAspectRatio: 3.1,
         ),
         itemCount: entries.length,
         itemBuilder: (context, index) {
           final e = entries[index];
           return InkWell(
             onTap: e.personId == null ? null : () => onTap(e.personId!),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              mainAxisSize: MainAxisSize.min,
+            borderRadius: BorderRadius.circular(8),
+            child: Row(
               children: [
-                Text(
-                  e.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.onSurface,
-                    decoration:
-                        e.personId == null ? null : TextDecoration.underline,
-                    decorationColor: colorScheme.onSurfaceVariant,
-                  ),
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  backgroundImage:
+                      e.photoPath != null && e.photoPath!.isNotEmpty
+                          ? smartImageProvider(e.photoPath!)
+                          : null,
+                  child: e.photoPath == null || e.photoPath!.isEmpty
+                      ? Icon(Icons.person,
+                          size: 18, color: colorScheme.onSurfaceVariant)
+                      : null,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  e.roleLabel,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: colorScheme.onSurfaceVariant,
-                    fontSize: 12,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        e.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.onSurface,
+                          decoration: e.personId == null
+                              ? null
+                              : TextDecoration.underline,
+                          decorationColor: colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        e.roleLabel,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colorScheme.onSurfaceVariant,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -91,6 +116,7 @@ List<CreditEntry> buildCreditEntries<C>({
   required String Function(C) roleOf,
   required String? Function(C) characterOf,
   required String? Function(int personId) nameOf,
+  required String? Function(int personId) photoPathOf,
 }) {
   final order = <int>[];
   final labelsByPerson = <int, List<String>>{};
@@ -130,6 +156,7 @@ List<CreditEntry> buildCreditEntries<C>({
             personId: id,
             name: nameOf(id)!,
             roleLabel: labelsByPerson[id]!.join(', '),
+            photoPath: photoPathOf(id),
           ))
       .toList();
 }

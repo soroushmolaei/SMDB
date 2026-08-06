@@ -179,6 +179,7 @@ class MovieDetailScreen extends ConsumerWidget {
                           roleOf: (c) => c.role,
                           characterOf: (c) => c.character,
                           nameOf: (id) => peopleById[id]?.name,
+                          photoPathOf: (id) => peopleById[id]?.photoPath,
                         );
 
                         return CreditsGrid(

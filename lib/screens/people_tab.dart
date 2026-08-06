@@ -1,9 +1,24 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/smart_image.dart';
 import 'person_detail_screen.dart';
+
+enum PersonSortOption { nameAsc, nameDesc, titleCountDesc }
+
+extension _PersonSortOptionLabel on PersonSortOption {
+  String get label {
+    switch (this) {
+      case PersonSortOption.nameAsc:
+        return 'Name (A-Z)';
+      case PersonSortOption.nameDesc:
+        return 'Name (Z-A)';
+      case PersonSortOption.titleCountDesc:
+        return 'Most Titles';
+    }
+  }
+}
 
 class PeopleTab extends ConsumerStatefulWidget {
   const PeopleTab({super.key});
@@ -14,6 +29,7 @@ class PeopleTab extends ConsumerStatefulWidget {
 
 class _PeopleTabState extends ConsumerState<PeopleTab> {
   String _query = '';
+  PersonSortOption _sort = PersonSortOption.nameAsc;
 
   @override
   Widget build(BuildContext context) {
@@ -29,25 +45,46 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: TextField(
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search),
-              hintText: 'Search people...',
-              isDense: true,
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => setState(() => _query = v.toLowerCase()),
+          child: Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  decoration: const InputDecoration(
+                    prefixIcon: Icon(Icons.search),
+                    hintText: 'Search people...',
+                    isDense: true,
+                    border: OutlineInputBorder(),
+                  ),
+                  onChanged: (v) => setState(() => _query = v.toLowerCase()),
+                ),
+              ),
+              const SizedBox(width: 8),
+              DropdownButton<PersonSortOption>(
+                value: _sort,
+                underline: const SizedBox.shrink(),
+                icon: const Icon(Icons.sort, size: 16),
+                items: PersonSortOption.values
+                    .map((s) => DropdownMenuItem(
+                          value: s,
+                          child:
+                              Text(s.label, style: const TextStyle(fontSize: 13)),
+                        ))
+                    .toList(),
+                onChanged: (v) {
+                  if (v != null) setState(() => _sort = v);
+                },
+              ),
+            ],
           ),
         ),
         Expanded(
           child: peopleAsync.when(
             data: (people) {
-              final filtered = _query.isEmpty
-                  ? people
-                  : people
-                      .where((p) => p.name.toLowerCase().contains(_query))
-                      .toList()
-                ..sort((a, b) => a.name.compareTo(b.name));
+              final filtered = (_query.isEmpty
+                      ? people
+                      : people.where(
+                          (p) => p.name.toLowerCase().contains(_query)))
+                  .toList();
 
               if (filtered.isEmpty) {
                 return Center(
@@ -114,6 +151,26 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                               bump(c.personId, 'guest_star');
                             }
 
+                            switch (_sort) {
+                              case PersonSortOption.nameAsc:
+                                filtered.sort(
+                                    (a, b) => a.name.compareTo(b.name));
+                                break;
+                              case PersonSortOption.nameDesc:
+                                filtered.sort(
+                                    (a, b) => b.name.compareTo(a.name));
+                                break;
+                              case PersonSortOption.titleCountDesc:
+                                filtered.sort((a, b) {
+                                  final byCount = (countByPerson[b.id] ?? 0)
+                                      .compareTo(countByPerson[a.id] ?? 0);
+                                  return byCount != 0
+                                      ? byCount
+                                      : a.name.compareTo(b.name);
+                                });
+                                break;
+                            }
+
                             return GridView.builder(
                               padding: const EdgeInsets.all(12),
                               gridDelegate:
@@ -144,7 +201,7 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                                         backgroundColor: Colors.white10,
                                         backgroundImage:
                                             person.photoPath != null
-                                                ? CachedNetworkImageProvider(
+                                                ? smartImageProvider(
                                                     person.photoPath!)
                                                 : null,
                                         child: person.photoPath == null

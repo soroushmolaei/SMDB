@@ -156,6 +156,7 @@ class ShowDetailScreen extends ConsumerWidget {
                           roleOf: (c) => c.role,
                           characterOf: (c) => c.character,
                           nameOf: (id) => peopleById[id]?.name,
+                          photoPathOf: (id) => peopleById[id]?.photoPath,
                         ),
                         onTap: (personId) => Navigator.of(context).push(
                           MaterialPageRoute(
