@@ -48,7 +48,7 @@ class MovieDetailScreen extends ConsumerWidget {
               Positioned.fill(
                 child: backdropUrl != null
                     ? SmartImage(
-                        path: backdropUrl!,
+                        path: backdropUrl,
                         fit: BoxFit.cover,
                         thumbnailBytes: movie.backdropThumbnail,
                         errorBuilder: (c) => Container(color: Colors.black),
