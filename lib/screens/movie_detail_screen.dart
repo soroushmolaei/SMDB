@@ -42,6 +42,24 @@ class MovieDetailScreen extends ConsumerWidget {
 
           return Stack(
             children: [
+              // Fixed, full-page backdrop. A sibling of the
+              // CustomScrollView (not a sliver inside it), so it never
+              // moves as the content below is scrolled up and down.
+              Positioned.fill(
+                child: backdropUrl != null
+                    ? SmartImage(
+                        path: backdropUrl!,
+                        fit: BoxFit.cover,
+                        thumbnailBytes: movie.backdropThumbnail,
+                        errorBuilder: (c) => Container(color: Colors.black),
+                      )
+                    : Container(color: Colors.black),
+              ),
+              Positioned.fill(
+                child: Container(
+                  color: colorScheme.primary.withValues(alpha: 0.5),
+                ),
+              ),
               CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
@@ -54,7 +72,6 @@ class MovieDetailScreen extends ConsumerWidget {
                       genres: movie.genres,
                       backdropUrl: backdropUrl,
                       posterUrl: posterUrl,
-                      backdropThumbnail: movie.backdropThumbnail,
                       posterThumbnail: movie.posterThumbnail,
                       isFavorite: movie.isFavorite,
                       watched: movie.watched,
@@ -73,173 +90,185 @@ class MovieDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                    child: Container(
+                      // Below the hero, content sits on a normal opaque
+                      // surface again — only the hero area shows the fixed
+                      // backdrop directly, everything else stays legible
+                      // regardless of the photo behind it.
+                      color: colorScheme.surface,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          FilledButton.icon(
-                            onPressed: () =>
-                                launchUrl(Uri.file(movie.filePath)),
-                            icon: const Icon(Icons.play_arrow, size: 18),
-                            label: const Text('Play Movie'),
-                            style: FilledButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 14, vertical: 8),
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                            child: Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                FilledButton.icon(
+                                  onPressed: () =>
+                                      launchUrl(Uri.file(movie.filePath)),
+                                  icon: const Icon(Icons.play_arrow, size: 18),
+                                  label: const Text('Play Movie'),
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                  ),
+                                ),
+                                if (movie.trailerFilePath != null)
+                                  OutlinedButton.icon(
+                                    onPressed: () => launchUrl(
+                                      Uri.file(movie.trailerFilePath!),
+                                    ),
+                                    icon: const Icon(
+                                        Icons.play_circle_outline,
+                                        size: 18),
+                                    label: const Text('Play Trailer'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
+                                    ),
+                                  ),
+                                if (movie.imdbId != null)
+                                  IconButton(
+                                    icon: const Icon(Icons.open_in_new),
+                                    tooltip: 'Open on IMDb',
+                                    onPressed: () => launchUrl(
+                                      Uri.parse(
+                                        'https://www.imdb.com/title/${movie.imdbId}/',
+                                      ),
+                                      mode: LaunchMode.externalApplication,
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
-                          if (movie.trailerFilePath != null)
-                            OutlinedButton.icon(
-                              onPressed: () => launchUrl(
-                                Uri.file(movie.trailerFilePath!),
-                              ),
-                              icon: const Icon(Icons.play_circle_outline,
-                                  size: 18),
-                              label: const Text('Play Trailer'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
+                          if (movie.genres != null &&
+                              movie.genres!.isNotEmpty)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: movie.genres!
+                                    .split(',')
+                                    .map((g) => g.trim())
+                                    .where((g) => g.isNotEmpty)
+                                    .map(
+                                      (g) => ActionChip(
+                                        label: Text(g),
+                                        onPressed: () =>
+                                            Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                GenreMoviesScreen(genre: g),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
                               ),
                             ),
-                          if (movie.imdbId != null)
-                            IconButton(
-                              icon: const Icon(Icons.open_in_new),
-                              tooltip: 'Open on IMDb',
-                              onPressed: () => launchUrl(
-                                Uri.parse(
-                                  'https://www.imdb.com/title/${movie.imdbId}/',
+                          if (movie.overview != null &&
+                              movie.overview!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                movie.overview!,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  height: 1.4,
                                 ),
-                                mode: LaunchMode.externalApplication,
                               ),
                             ),
+                          Builder(
+                            builder: (context) {
+                              final allCredits =
+                                  ref.watch(allCreditsStreamProvider).value ??
+                                      [];
+                              final people =
+                                  ref.watch(peopleStreamProvider).value ??
+                                      [];
+                              final peopleById = {
+                                for (final p in people) p.id: p,
+                              };
+                              final movieCredits = allCredits
+                                  .where((c) => c.movieId == movie.id)
+                                  .toList();
+
+                              void onTap(int personId) =>
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PersonDetailScreen(
+                                          personId: personId),
+                                    ),
+                                  );
+
+                              final directors = buildRoleEntries(
+                                credits: movieCredits
+                                    .where((c) => c.role == 'director'),
+                                personIdOf: (c) => c.personId,
+                                labelOf: (c) => 'Director',
+                                nameOf: (id) => peopleById[id]?.name,
+                                photoPathOf: (id) =>
+                                    peopleById[id]?.photoPath,
+                              );
+                              final writers = buildRoleEntries(
+                                credits: movieCredits
+                                    .where((c) => c.role == 'writer'),
+                                personIdOf: (c) => c.personId,
+                                labelOf: (c) => 'Writer',
+                                nameOf: (id) => peopleById[id]?.name,
+                                photoPathOf: (id) =>
+                                    peopleById[id]?.photoPath,
+                              );
+                              final cast = buildRoleEntries(
+                                credits: movieCredits
+                                    .where((c) => c.role == 'actor'),
+                                personIdOf: (c) => c.personId,
+                                labelOf: (c) => c.character != null &&
+                                        c.character!.isNotEmpty
+                                    ? c.character!
+                                    : 'Actor',
+                                nameOf: (id) => peopleById[id]?.name,
+                                photoPathOf: (id) =>
+                                    peopleById[id]?.photoPath,
+                              );
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CreditsSection(
+                                    title: 'DIRECTOR',
+                                    entries: directors,
+                                    onTap: onTap,
+                                  ),
+                                  CreditsSection(
+                                    title: 'WRITER',
+                                    entries: writers,
+                                    onTap: onTap,
+                                  ),
+                                  CreditsSection(
+                                    title: 'CAST',
+                                    entries: cast,
+                                    onTap: onTap,
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          AwardsSection(
+                            itemType: 'movie',
+                            itemId: movie.id,
+                            imdbId: movie.imdbId,
+                          ),
+                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
                   ),
-                  if (movie.genres != null && movie.genres!.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: movie.genres!
-                              .split(',')
-                              .map((g) => g.trim())
-                              .where((g) => g.isNotEmpty)
-                              .map(
-                                (g) => ActionChip(
-                                  label: Text(g),
-                                  onPressed: () =>
-                                      Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          GenreMoviesScreen(genre: g),
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ),
-                    ),
-                  if (movie.overview != null && movie.overview!.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          movie.overview!,
-                          style: TextStyle(
-                            color: colorScheme.onSurface,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  SliverToBoxAdapter(
-                    child: Builder(
-                      builder: (context) {
-                        final allCredits =
-                            ref.watch(allCreditsStreamProvider).value ?? [];
-                        final people =
-                            ref.watch(peopleStreamProvider).value ?? [];
-                        final peopleById = {
-                          for (final p in people) p.id: p,
-                        };
-                        final movieCredits = allCredits
-                            .where((c) => c.movieId == movie.id)
-                            .toList();
-
-                        void onTap(int personId) =>
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    PersonDetailScreen(personId: personId),
-                              ),
-                            );
-
-                        final directors = buildRoleEntries(
-                          credits:
-                              movieCredits.where((c) => c.role == 'director'),
-                          personIdOf: (c) => c.personId,
-                          labelOf: (c) => 'Director',
-                          nameOf: (id) => peopleById[id]?.name,
-                          photoPathOf: (id) => peopleById[id]?.photoPath,
-                        );
-                        final writers = buildRoleEntries(
-                          credits:
-                              movieCredits.where((c) => c.role == 'writer'),
-                          personIdOf: (c) => c.personId,
-                          labelOf: (c) => 'Writer',
-                          nameOf: (id) => peopleById[id]?.name,
-                          photoPathOf: (id) => peopleById[id]?.photoPath,
-                        );
-                        final cast = buildRoleEntries(
-                          credits:
-                              movieCredits.where((c) => c.role == 'actor'),
-                          personIdOf: (c) => c.personId,
-                          labelOf: (c) => c.character != null &&
-                                  c.character!.isNotEmpty
-                              ? c.character!
-                              : 'Actor',
-                          nameOf: (id) => peopleById[id]?.name,
-                          photoPathOf: (id) => peopleById[id]?.photoPath,
-                        );
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CreditsSection(
-                              title: 'DIRECTOR',
-                              entries: directors,
-                              onTap: onTap,
-                            ),
-                            CreditsSection(
-                              title: 'WRITER',
-                              entries: writers,
-                              onTap: onTap,
-                            ),
-                            CreditsSection(
-                              title: 'CAST',
-                              entries: cast,
-                              onTap: onTap,
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                  SliverToBoxAdapter(
-                    child: AwardsSection(
-                      itemType: 'movie',
-                      itemId: movie.id,
-                      imdbId: movie.imdbId,
-                    ),
-                  ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
                 ],
               ),
               DetailTopBar(
@@ -333,11 +362,11 @@ class MovieDetailScreen extends ConsumerWidget {
   }
 }
 
-/// The backdrop + gradient + poster + title/metadata/score hero block at
-/// the top of the movie detail page. Intentionally stays dark with white
-/// text regardless of the app's light/dark theme — a photo backdrop needs
-/// a dark scrim for legibility either way, matching how most media apps
-/// (Netflix, Plex, TMDB itself) treat this kind of hero image.
+/// The poster + title/metadata/score block at the top of the movie detail
+/// page. Sits on top of the page-level fixed backdrop (see
+/// [MovieDetailScreen]) instead of painting its own image — text here
+/// stays white regardless of the app's light/dark theme, since a photo
+/// backdrop needs light text for legibility either way.
 class _MovieHero extends StatelessWidget {
   final String title;
   final int? year;
@@ -347,7 +376,6 @@ class _MovieHero extends StatelessWidget {
   final String? genres;
   final String? backdropUrl;
   final String? posterUrl;
-  final Uint8List? backdropThumbnail;
   final Uint8List? posterThumbnail;
   final bool isFavorite;
   final bool watched;
@@ -364,7 +392,6 @@ class _MovieHero extends StatelessWidget {
     required this.genres,
     required this.backdropUrl,
     required this.posterUrl,
-    required this.backdropThumbnail,
     required this.posterThumbnail,
     required this.isFavorite,
     required this.watched,
@@ -377,43 +404,17 @@ class _MovieHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 440,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          GestureDetector(
-            onTap: () => FullscreenImageViewer.show(
-              context,
-              backdropUrl ?? posterUrl,
-            ),
-            child: backdropUrl != null
-                ? SmartImage(
-                    path: backdropUrl!,
-                    fit: BoxFit.cover,
-                    thumbnailBytes: backdropThumbnail,
-                    errorBuilder: (c) => Container(color: Colors.black),
-                  )
-                : Container(color: Colors.black),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0.0, 0.5, 1.0],
-                colors: [
-                  Colors.black.withValues(alpha: 0.55),
-                  Colors.black.withValues(alpha: 0.6),
-                  Colors.black.withValues(alpha: 0.92),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            top: 40,
-            bottom: 40,
-            child: Center(
+      child: GestureDetector(
+        // Tapping empty hero space still opens the fullscreen backdrop
+        // viewer, even though the image itself is painted a layer below.
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FullscreenImageViewer.show(
+          context,
+          backdropUrl ?? posterUrl,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+          child: Center(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -578,9 +579,8 @@ class _MovieHero extends StatelessWidget {
                 ),
               ],
             ),
-            ),
           ),
-        ],
+        ),
       ),
     );
   }

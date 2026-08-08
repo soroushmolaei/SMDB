@@ -54,6 +54,24 @@ class ShowDetailScreen extends ConsumerWidget {
 
           return Stack(
             children: [
+              // Fixed, full-page backdrop. A sibling of the
+              // CustomScrollView (not a sliver inside it), so it never
+              // moves as the content below is scrolled up and down.
+              Positioned.fill(
+                child: show.backdropPath != null
+                    ? SmartImage(
+                        path: show.backdropPath!,
+                        fit: BoxFit.cover,
+                        thumbnailBytes: show.backdropThumbnail,
+                        errorBuilder: (c) => Container(color: Colors.black),
+                      )
+                    : Container(color: Colors.black),
+              ),
+              Positioned.fill(
+                child: Container(
+                  color: colorScheme.primary.withValues(alpha: 0.5),
+                ),
+              ),
               CustomScrollView(
                 slivers: [
                   SliverToBoxAdapter(
@@ -65,7 +83,6 @@ class ShowDetailScreen extends ConsumerWidget {
                       genres: show.genres,
                       backdropUrl: show.backdropPath,
                       posterUrl: show.posterPath,
-                      backdropThumbnail: show.backdropThumbnail,
                       posterThumbnail: show.posterThumbnail,
                       isFavorite: show.isFavorite,
                       onToggleFavorite: () => ref
@@ -79,176 +96,178 @@ class ShowDetailScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  if (show.imdbId != null)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
-                          crossAxisAlignment: WrapCrossAlignment.center,
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: () => launchUrl(
-                                Uri.parse(
-                                  'https://www.imdb.com/title/${show.imdbId}/',
-                                ),
-                                mode: LaunchMode.externalApplication,
-                              ),
-                              icon: const Icon(Icons.open_in_new, size: 18),
-                              label: const Text('Open on IMDb'),
-                              style: OutlinedButton.styleFrom(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 14, vertical: 8),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  if (show.genres != null && show.genres!.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding:
-                            const EdgeInsets.fromLTRB(16, 16, 16, 0),
-                        child: Wrap(
-                          spacing: 8,
-                          runSpacing: 4,
-                          children: show.genres!
-                              .split(',')
-                              .map((g) => g.trim())
-                              .where((g) => g.isNotEmpty)
-                              .map(
-                                (g) => ActionChip(
-                                  label: Text(g),
-                                  onPressed: () =>
-                                      Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) =>
-                                          GenreShowsScreen(genre: g),
+                  SliverToBoxAdapter(
+                    child: Container(
+                      // Below the hero, content sits on a normal opaque
+                      // surface again — only the hero area shows the fixed
+                      // backdrop directly, everything else stays legible
+                      // regardless of the photo behind it.
+                      color: colorScheme.surface,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (show.imdbId != null)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                crossAxisAlignment: WrapCrossAlignment.center,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () => launchUrl(
+                                      Uri.parse(
+                                        'https://www.imdb.com/title/${show.imdbId}/',
+                                      ),
+                                      mode: LaunchMode.externalApplication,
+                                    ),
+                                    icon: const Icon(Icons.open_in_new,
+                                        size: 18),
+                                    label: const Text('Open on IMDb'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 14, vertical: 8),
                                     ),
                                   ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ),
-                    ),
-                  if (show.overview != null && show.overview!.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Text(
-                          show.overview!,
-                          style: TextStyle(
-                            color: colorScheme.onSurface,
-                            height: 1.4,
-                          ),
-                        ),
-                      ),
-                    ),
-                  if (showCredits.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Builder(builder: (context) {
-                        void onTap(int personId) =>
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    PersonDetailScreen(personId: personId),
+                                ],
                               ),
-                            );
-
-                        final creators = buildRoleEntries(
-                          credits:
-                              showCredits.where((c) => c.role == 'creator'),
-                          personIdOf: (c) => c.personId,
-                          labelOf: (c) => 'Creator',
-                          nameOf: (id) => peopleById[id]?.name,
-                          photoPathOf: (id) => peopleById[id]?.photoPath,
-                        );
-                        final cast = buildRoleEntries(
-                          credits:
-                              showCredits.where((c) => c.role == 'actor'),
-                          personIdOf: (c) => c.personId,
-                          labelOf: (c) => c.character != null &&
-                                  c.character!.isNotEmpty
-                              ? c.character!
-                              : 'Actor',
-                          nameOf: (id) => peopleById[id]?.name,
-                          photoPathOf: (id) => peopleById[id]?.photoPath,
-                        );
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            CreditsSection(
-                              title: 'CREATOR',
-                              entries: creators,
-                              onTap: onTap,
                             ),
-                            CreditsSection(
-                              title: 'CAST',
-                              entries: cast,
-                              onTap: onTap,
+                          if (show.genres != null &&
+                              show.genres!.isNotEmpty)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 4,
+                                children: show.genres!
+                                    .split(',')
+                                    .map((g) => g.trim())
+                                    .where((g) => g.isNotEmpty)
+                                    .map(
+                                      (g) => ActionChip(
+                                        label: Text(g),
+                                        onPressed: () =>
+                                            Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                GenreShowsScreen(genre: g),
+                                          ),
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
                             ),
-                          ],
-                        );
-                      }),
-                    ),
-                  SliverToBoxAdapter(
-                    child: AwardsSection(
-                      itemType: 'show',
-                      itemId: show.id,
-                      imdbId: show.imdbId,
+                          if (show.overview != null &&
+                              show.overview!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Text(
+                                show.overview!,
+                                style: TextStyle(
+                                  color: colorScheme.onSurface,
+                                  height: 1.4,
+                                ),
+                              ),
+                            ),
+                          if (showCredits.isNotEmpty)
+                            Builder(builder: (context) {
+                              void onTap(int personId) =>
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => PersonDetailScreen(
+                                          personId: personId),
+                                    ),
+                                  );
+
+                              final creators = buildRoleEntries(
+                                credits: showCredits
+                                    .where((c) => c.role == 'creator'),
+                                personIdOf: (c) => c.personId,
+                                labelOf: (c) => 'Creator',
+                                nameOf: (id) => peopleById[id]?.name,
+                                photoPathOf: (id) =>
+                                    peopleById[id]?.photoPath,
+                              );
+                              final cast = buildRoleEntries(
+                                credits: showCredits
+                                    .where((c) => c.role == 'actor'),
+                                personIdOf: (c) => c.personId,
+                                labelOf: (c) => c.character != null &&
+                                        c.character!.isNotEmpty
+                                    ? c.character!
+                                    : 'Actor',
+                                nameOf: (id) => peopleById[id]?.name,
+                                photoPathOf: (id) =>
+                                    peopleById[id]?.photoPath,
+                              );
+
+                              return Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  CreditsSection(
+                                    title: 'CREATOR',
+                                    entries: creators,
+                                    onTap: onTap,
+                                  ),
+                                  CreditsSection(
+                                    title: 'CAST',
+                                    entries: cast,
+                                    onTap: onTap,
+                                  ),
+                                ],
+                              );
+                            }),
+                          AwardsSection(
+                            itemType: 'show',
+                            itemId: show.id,
+                            imdbId: show.imdbId,
+                          ),
+                          Padding(
+                            padding:
+                                const EdgeInsets.fromLTRB(16, 24, 16, 8),
+                            child: Text(
+                              'Episodes',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                          ),
+                          if (seasons.isEmpty)
+                            Padding(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 16),
+                              child: Text(
+                                'No episodes found.',
+                                style: TextStyle(
+                                    color: colorScheme.onSurfaceVariant),
+                              ),
+                            )
+                          else
+                            ...seasons.map((season) {
+                              final seasonEpisodes = episodes
+                                  .where((e) => e.seasonNumber == season)
+                                  .toList()
+                                ..sort((a, b) => a.episodeNumber
+                                    .compareTo(b.episodeNumber));
+                              return ExpansionTile(
+                                title: Text('Season $season'),
+                                subtitle: Text(
+                                    '${seasonEpisodes.length} episodes'),
+                                children: seasonEpisodes
+                                    .map((ep) => _EpisodeTile(episode: ep))
+                                    .toList(),
+                              );
+                            }),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
                     ),
                   ),
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                      child: Text(
-                        'Episodes',
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 16,
-                          color: colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                  ),
-                  if (seasons.isEmpty)
-                    SliverToBoxAdapter(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'No episodes found.',
-                          style:
-                              TextStyle(color: colorScheme.onSurfaceVariant),
-                        ),
-                      ),
-                    )
-                  else
-                    SliverList(
-                      delegate: SliverChildBuilderDelegate(
-                        (context, index) {
-                          final season = seasons[index];
-                          final seasonEpisodes = episodes
-                              .where((e) => e.seasonNumber == season)
-                              .toList()
-                            ..sort((a, b) =>
-                                a.episodeNumber.compareTo(b.episodeNumber));
-                          return ExpansionTile(
-                            title: Text('Season $season'),
-                            subtitle:
-                                Text('${seasonEpisodes.length} episodes'),
-                            children: seasonEpisodes
-                                .map((ep) => _EpisodeTile(episode: ep))
-                                .toList(),
-                          );
-                        },
-                        childCount: seasons.length,
-                      ),
-                    ),
-                  const SliverToBoxAdapter(child: SizedBox(height: 32)),
                 ],
               ),
               DetailTopBar(
@@ -336,10 +355,11 @@ class ShowDetailScreen extends ConsumerWidget {
   }
 }
 
-/// The backdrop + gradient + poster + title/metadata/score hero block at
-/// the top of the show detail page. Intentionally stays dark with white
-/// text regardless of the app's light/dark theme, matching the movie
-/// detail hero and most media apps' treatment of a photographic backdrop.
+/// The poster + title/metadata/score block at the top of the show detail
+/// page. Sits on top of the page-level fixed backdrop (see
+/// [ShowDetailScreen]) instead of painting its own image — text here
+/// stays white regardless of the app's light/dark theme, since a photo
+/// backdrop needs light text for legibility either way.
 class _ShowHero extends StatelessWidget {
   final String title;
   final String? contentRating;
@@ -348,7 +368,6 @@ class _ShowHero extends StatelessWidget {
   final String? genres;
   final String? backdropUrl;
   final String? posterUrl;
-  final Uint8List? backdropThumbnail;
   final Uint8List? posterThumbnail;
   final bool isFavorite;
   final VoidCallback onToggleFavorite;
@@ -362,7 +381,6 @@ class _ShowHero extends StatelessWidget {
     required this.genres,
     required this.backdropUrl,
     required this.posterUrl,
-    required this.backdropThumbnail,
     required this.posterThumbnail,
     required this.isFavorite,
     required this.onToggleFavorite,
@@ -373,43 +391,17 @@ class _ShowHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 440,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          GestureDetector(
-            onTap: () => FullscreenImageViewer.show(
-              context,
-              backdropUrl ?? posterUrl,
-            ),
-            child: backdropUrl != null
-                ? SmartImage(
-                    path: backdropUrl!,
-                    fit: BoxFit.cover,
-                    thumbnailBytes: backdropThumbnail,
-                    errorBuilder: (c) => Container(color: Colors.black),
-                  )
-                : Container(color: Colors.black),
-          ),
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                stops: const [0.0, 0.5, 1.0],
-                colors: [
-                  Colors.black.withValues(alpha: 0.55),
-                  Colors.black.withValues(alpha: 0.6),
-                  Colors.black.withValues(alpha: 0.92),
-                ],
-              ),
-            ),
-          ),
-          Positioned(
-            left: 16,
-            right: 16,
-            top: 40,
-            bottom: 40,
-            child: Center(
+      child: GestureDetector(
+        // Tapping empty hero space still opens the fullscreen backdrop
+        // viewer, even though the image itself is painted a layer below.
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FullscreenImageViewer.show(
+          context,
+          backdropUrl ?? posterUrl,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
+          child: Center(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -550,9 +542,8 @@ class _ShowHero extends StatelessWidget {
                 ),
               ],
             ),
-            ),
           ),
-        ],
+        ),
       ),
     );
   }
