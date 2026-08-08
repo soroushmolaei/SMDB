@@ -224,10 +224,9 @@ class ShowDetailScreen extends ConsumerWidget {
                             itemId: show.id,
                             imdbId: show.imdbId,
                           ),
-                          Padding(
-                            padding:
-                                const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                            child: const Text(
+                          const Padding(
+                            padding: EdgeInsets.fromLTRB(16, 24, 16, 8),
+                            child: Text(
                               'Episodes',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
@@ -237,10 +236,9 @@ class ShowDetailScreen extends ConsumerWidget {
                             ),
                           ),
                           if (seasons.isEmpty)
-                            Padding(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 16),
-                              child: const Text(
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 16),
+                              child: Text(
                                 'No episodes found.',
                                 style: TextStyle(color: Colors.white54),
                               ),
