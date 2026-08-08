@@ -25,7 +25,8 @@ class ShowDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final showsAsync = ref.watch(showsStreamProvider);
-    final colorScheme = Theme.of(context).colorScheme;
+    final overlayOpacity =
+        ref.watch(themeControllerProvider).backdropOverlayOpacity;
 
     return Scaffold(
       body: showsAsync.when(
@@ -69,7 +70,7 @@ class ShowDetailScreen extends ConsumerWidget {
               ),
               Positioned.fill(
                 child: Container(
-                  color: colorScheme.primary.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: overlayOpacity),
                 ),
               ),
               CustomScrollView(
@@ -97,17 +98,15 @@ class ShowDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: Container(
-                      // Below the hero, content sits on a normal opaque
-                      // surface again — only the hero area shows the fixed
-                      // backdrop directly, everything else stays legible
-                      // regardless of the photo behind it.
-                      color: colorScheme.surface,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (show.imdbId != null)
-                            Padding(
+                    // The whole page shares the one fixed backdrop behind
+                    // it now — no opaque panel here, so content sits
+                    // directly over the image+tint the same way the hero
+                    // does.
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (show.imdbId != null)
+                          Padding(
                               padding:
                                   const EdgeInsets.fromLTRB(16, 16, 16, 0),
                               child: Wrap(
@@ -166,8 +165,8 @@ class ShowDetailScreen extends ConsumerWidget {
                               padding: const EdgeInsets.all(16),
                               child: Text(
                                 show.overview!,
-                                style: TextStyle(
-                                  color: colorScheme.onSurface,
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   height: 1.4,
                                 ),
                               ),
@@ -228,12 +227,12 @@ class ShowDetailScreen extends ConsumerWidget {
                           Padding(
                             padding:
                                 const EdgeInsets.fromLTRB(16, 24, 16, 8),
-                            child: Text(
+                            child: const Text(
                               'Episodes',
                               style: TextStyle(
                                 fontWeight: FontWeight.bold,
                                 fontSize: 16,
-                                color: colorScheme.onSurface,
+                                color: Colors.white,
                               ),
                             ),
                           ),
@@ -241,10 +240,9 @@ class ShowDetailScreen extends ConsumerWidget {
                             Padding(
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 16),
-                              child: Text(
+                              child: const Text(
                                 'No episodes found.',
-                                style: TextStyle(
-                                    color: colorScheme.onSurfaceVariant),
+                                style: TextStyle(color: Colors.white54),
                               ),
                             )
                           else
@@ -255,9 +253,17 @@ class ShowDetailScreen extends ConsumerWidget {
                                 ..sort((a, b) => a.episodeNumber
                                     .compareTo(b.episodeNumber));
                               return ExpansionTile(
-                                title: Text('Season $season'),
+                                title: Text(
+                                  'Season $season',
+                                  style: const TextStyle(color: Colors.white),
+                                ),
                                 subtitle: Text(
-                                    '${seasonEpisodes.length} episodes'),
+                                  '${seasonEpisodes.length} episodes',
+                                  style:
+                                      const TextStyle(color: Colors.white54),
+                                ),
+                                iconColor: Colors.white70,
+                                collapsedIconColor: Colors.white70,
                                 children: seasonEpisodes
                                     .map((ep) => _EpisodeTile(episode: ep))
                                     .toList(),
@@ -267,7 +273,6 @@ class ShowDetailScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  ),
                 ],
               ),
               DetailTopBar(
@@ -555,8 +560,9 @@ class _EpisodeTile extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final surfaceVariant = Theme.of(context).colorScheme.surfaceContainerHighest;
     return ListTile(
+      titleTextStyle: const TextStyle(color: Colors.white, fontSize: 16),
+      subtitleTextStyle: const TextStyle(color: Colors.white54, fontSize: 14),
       leading: GestureDetector(
         onTap: () =>
             FullscreenImageViewer.show(context, episode.stillPath),
@@ -569,12 +575,13 @@ class _EpisodeTile extends ConsumerWidget {
                 ? CachedNetworkImage(
                     imageUrl: episode.stillPath!,
                     fit: BoxFit.cover,
-                    errorWidget: (c, u, e) => Container(color: surfaceVariant),
+                    errorWidget: (c, u, e) =>
+                        Container(color: Colors.white24),
                   )
                 : Container(
-                    color: surfaceVariant,
+                    color: Colors.white24,
                     child: const Icon(Icons.tv_outlined,
-                        color: Colors.white24, size: 16),
+                        color: Colors.white54, size: 16),
                   ),
           ),
         ),

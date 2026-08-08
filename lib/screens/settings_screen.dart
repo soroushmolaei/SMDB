@@ -402,6 +402,41 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     .read(themeControllerProvider.notifier)
                     .setMode(selected.first),
               ),
+              const SizedBox(height: 20),
+              Text(
+                'Backdrop overlay',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 12),
+              ),
+              Text(
+                'How dark the black tint over movie/show backdrop '
+                'images is.',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 11),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: Slider(
+                      value: themeSettings.backdropOverlayOpacity,
+                      min: 0.0,
+                      max: 1.0,
+                      divisions: 20,
+                      label:
+                          '${(themeSettings.backdropOverlayOpacity * 100).round()}%',
+                      onChanged: (v) => ref
+                          .read(themeControllerProvider.notifier)
+                          .setBackdropOverlayOpacity(v),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 44,
+                    child: Text(
+                      '${(themeSettings.backdropOverlayOpacity * 100).round()}%',
+                      textAlign: TextAlign.end,
+                      style: TextStyle(color: onSurface, fontSize: 13),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 32),
               const Text(
                 'TMDB',

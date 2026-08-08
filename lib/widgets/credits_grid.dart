@@ -43,9 +43,9 @@ class CreditsSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
           child: Text(
             title,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 12,
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+              color: Colors.white38,
             ),
           ),
         ),
@@ -67,7 +67,6 @@ class CreditsGrid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
-    final colorScheme = Theme.of(context).colorScheme;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
@@ -90,14 +89,14 @@ class CreditsGrid extends StatelessWidget {
               children: [
                 CircleAvatar(
                   radius: 20,
-                  backgroundColor: colorScheme.surfaceContainerHighest,
+                  backgroundColor: Colors.white24,
                   backgroundImage:
                       e.photoPath != null && e.photoPath!.isNotEmpty
                           ? smartImageProvider(e.photoPath!)
                           : null,
                   child: e.photoPath == null || e.photoPath!.isEmpty
-                      ? Icon(Icons.person,
-                          size: 18, color: colorScheme.onSurfaceVariant)
+                      ? const Icon(Icons.person,
+                          size: 18, color: Colors.white54)
                       : null,
                 ),
                 const SizedBox(width: 10),
@@ -113,11 +112,11 @@ class CreditsGrid extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                           fontWeight: FontWeight.bold,
-                          color: colorScheme.onSurface,
+                          color: Colors.white,
                           decoration: e.personId == null
                               ? null
                               : TextDecoration.underline,
-                          decorationColor: colorScheme.onSurfaceVariant,
+                          decorationColor: Colors.white54,
                         ),
                       ),
                       const SizedBox(height: 2),
@@ -125,8 +124,8 @@ class CreditsGrid extends StatelessWidget {
                         e.roleLabel,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: colorScheme.onSurfaceVariant,
+                        style: const TextStyle(
+                          color: Colors.white54,
                           fontSize: 12,
                         ),
                       ),

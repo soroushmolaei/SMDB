@@ -140,6 +140,7 @@ class ThemeController extends StateNotifier<ThemeSettings> {
       : super(ThemeSettings(
           color: AppThemeColor.fromKey(initial.themeColor),
           mode: ThemeModeStorage.fromKey(initial.themeMode),
+          backdropOverlayOpacity: initial.backdropOverlayOpacity ?? 0.5,
         ));
 
   Future<void> setColor(AppThemeColor color) async {
@@ -150,6 +151,11 @@ class ThemeController extends StateNotifier<ThemeSettings> {
   Future<void> setMode(ThemeMode mode) async {
     state = state.copyWith(mode: mode);
     await AppConfigService.update(themeMode: mode.storageKey);
+  }
+
+  Future<void> setBackdropOverlayOpacity(double value) async {
+    state = state.copyWith(backdropOverlayOpacity: value);
+    await AppConfigService.update(backdropOverlayOpacity: value);
   }
 }
 

@@ -25,6 +25,10 @@ class AppConfig {
   final String? themeColor;
   final String? themeMode;
 
+  /// Opacity (0.0–1.0) of the black tint drawn over the fixed backdrop on
+  /// movie/show detail pages. Null means "use the default" (0.5).
+  final double? backdropOverlayOpacity;
+
   AppConfig({
     this.tmdbApiKey,
     this.omdbApiKey,
@@ -33,6 +37,7 @@ class AppConfig {
     this.databasePath,
     this.themeColor,
     this.themeMode,
+    this.backdropOverlayOpacity,
   });
 
   Map<String, dynamic> toJson() => {
@@ -43,6 +48,7 @@ class AppConfig {
         'database_path': databasePath,
         'theme_color': themeColor,
         'theme_mode': themeMode,
+        'backdrop_overlay_opacity': backdropOverlayOpacity,
       };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
@@ -53,6 +59,8 @@ class AppConfig {
         databasePath: json['database_path'] as String?,
         themeColor: json['theme_color'] as String?,
         themeMode: json['theme_mode'] as String?,
+        backdropOverlayOpacity:
+            (json['backdrop_overlay_opacity'] as num?)?.toDouble(),
       );
 }
 
@@ -106,6 +114,7 @@ class AppConfigService {
     bool clearDatabasePath = false,
     String? themeColor,
     String? themeMode,
+    double? backdropOverlayOpacity,
   }) async {
     final current = await load();
     final updated = AppConfig(
@@ -118,6 +127,8 @@ class AppConfigService {
           clearDatabasePath ? null : (databasePath ?? current.databasePath),
       themeColor: themeColor ?? current.themeColor,
       themeMode: themeMode ?? current.themeMode,
+      backdropOverlayOpacity:
+          backdropOverlayOpacity ?? current.backdropOverlayOpacity,
     );
     return save(updated);
   }

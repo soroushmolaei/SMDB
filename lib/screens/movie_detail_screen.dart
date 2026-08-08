@@ -23,7 +23,8 @@ class MovieDetailScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final moviesAsync = ref.watch(moviesStreamProvider);
-    final colorScheme = Theme.of(context).colorScheme;
+    final overlayOpacity =
+        ref.watch(themeControllerProvider).backdropOverlayOpacity;
 
     return Scaffold(
       body: moviesAsync.when(
@@ -57,7 +58,7 @@ class MovieDetailScreen extends ConsumerWidget {
               ),
               Positioned.fill(
                 child: Container(
-                  color: colorScheme.primary.withValues(alpha: 0.5),
+                  color: Colors.black.withValues(alpha: overlayOpacity),
                 ),
               ),
               CustomScrollView(
@@ -90,17 +91,15 @@ class MovieDetailScreen extends ConsumerWidget {
                     ),
                   ),
                   SliverToBoxAdapter(
-                    child: Container(
-                      // Below the hero, content sits on a normal opaque
-                      // surface again — only the hero area shows the fixed
-                      // backdrop directly, everything else stays legible
-                      // regardless of the photo behind it.
-                      color: colorScheme.surface,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    // The whole page shares the one fixed backdrop behind
+                    // it now — no opaque panel here, so content sits
+                    // directly over the image+tint the same way the hero
+                    // does.
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
                             child: Wrap(
                               spacing: 8,
                               runSpacing: 8,
@@ -177,8 +176,8 @@ class MovieDetailScreen extends ConsumerWidget {
                               padding: const EdgeInsets.all(16),
                               child: Text(
                                 movie.overview!,
-                                style: TextStyle(
-                                  color: colorScheme.onSurface,
+                                style: const TextStyle(
+                                  color: Colors.white,
                                   height: 1.4,
                                 ),
                               ),
@@ -268,7 +267,6 @@ class MovieDetailScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  ),
                 ],
               ),
               DetailTopBar(

@@ -78,12 +78,27 @@ extension ThemeModeStorage on ThemeMode {
 class ThemeSettings {
   final AppThemeColor color;
   final ThemeMode mode;
-  const ThemeSettings({required this.color, required this.mode});
 
-  ThemeSettings copyWith({AppThemeColor? color, ThemeMode? mode}) {
+  /// Opacity of the black tint drawn over the fixed backdrop image on
+  /// movie/show detail pages. Defaults to 0.5 (50%).
+  final double backdropOverlayOpacity;
+
+  const ThemeSettings({
+    required this.color,
+    required this.mode,
+    this.backdropOverlayOpacity = 0.5,
+  });
+
+  ThemeSettings copyWith({
+    AppThemeColor? color,
+    ThemeMode? mode,
+    double? backdropOverlayOpacity,
+  }) {
     return ThemeSettings(
       color: color ?? this.color,
       mode: mode ?? this.mode,
+      backdropOverlayOpacity:
+          backdropOverlayOpacity ?? this.backdropOverlayOpacity,
     );
   }
 }
