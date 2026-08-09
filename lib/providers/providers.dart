@@ -1073,7 +1073,8 @@ class ScanController extends StateNotifier<ScanState> {
 
     var success = false;
     final trailerPath = movie.trailerFilePath ??
-        await LibraryScanner.findTrailerInFolder(movie.folderPath);
+        await LibraryScanner.findTrailerInFolder(
+            movie.folderPath, movie.filePath);
     if (match != null) {
       await db.upsertMovie(MoviesCompanion.insert(
         title: movie.title,

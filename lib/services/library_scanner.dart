@@ -125,60 +125,40 @@ class ScannedShow {
 // ---------------------------------------------------------------------------
 
 class LibraryScanner {
-  /// Scans [rootPath] for movies. Supports both:
-  ///  - one subfolder per movie, e.g. "The Matrix (1999)/The Matrix.mkv"
-  ///  - loose video files directly inside [rootPath]
+  /// Scans [rootPath] recursively, at any folder depth, for video files.
+  /// Each qualifying file becomes its own movie, with the title and year
+  /// parsed from the file's own name -- not any parent folder -- so how
+  /// the files happen to be organized into subfolders (one folder per
+  /// movie, movies grouped by genre, loose files, or anything else)
+  /// doesn't matter.
   static Future<List<ScannedMovie>> scanMovies(String rootPath) async {
     final root = Directory(rootPath);
     if (!await root.exists()) return [];
 
     final found = <ScannedMovie>[];
+    // Caches the trailer lookup per folder so a folder holding more than
+    // one movie file isn't re-listed once per movie found in it.
+    final trailerCache = <String, String?>{};
 
-    await for (final entity in root.list(followLinks: false)) {
-      if (entity is Directory) {
-        final videos = await _allVideoFiles(entity);
-        if (videos.isEmpty) continue;
+    await for (final entity
+        in root.list(recursive: true, followLinks: false)) {
+      if (entity is! File || !isVideoFile(entity.path)) continue;
+      final nameNoExt = p.basenameWithoutExtension(entity.path);
+      if (_looksLikeTrailer(nameNoExt)) continue;
 
-        File? trailer;
-        for (final f in videos) {
-          final name = p.basenameWithoutExtension(f.path);
-          if (_looksLikeTrailer(name)) {
-            trailer ??= f;
-          }
-        }
-        final mainCandidates =
-            videos.where((f) => f.path != trailer?.path).toList();
-        if (mainCandidates.isEmpty) continue;
-
-        File main = mainCandidates.first;
-        var mainSize = -1;
-        for (final f in mainCandidates) {
-          final size = await f.length();
-          if (size > mainSize) {
-            mainSize = size;
-            main = f;
-          }
-        }
-
-        final parsed = parseTitleAndYear(p.basename(entity.path));
-        found.add(ScannedMovie(
-          title: parsed.title,
-          year: parsed.year,
-          filePath: main.path,
-          trailerFilePath: trailer?.path,
-          folderPath: entity.path,
-        ));
-      } else if (entity is File && isVideoFile(entity.path)) {
-        final nameNoExt = p.basenameWithoutExtension(entity.path);
-        if (_looksLikeTrailer(nameNoExt)) continue;
-        final parsed = parseTitleAndYear(nameNoExt);
-        found.add(ScannedMovie(
-          title: parsed.title,
-          year: parsed.year,
-          filePath: entity.path,
-          folderPath: root.path,
-        ));
+      final parsed = parseTitleAndYear(nameNoExt);
+      final folder = p.dirname(entity.path);
+      if (!trailerCache.containsKey(folder)) {
+        trailerCache[folder] = await findTrailerInFolder(folder, entity.path);
       }
+
+      found.add(ScannedMovie(
+        title: parsed.title,
+        year: parsed.year,
+        filePath: entity.path,
+        trailerFilePath: trailerCache[folder],
+        folderPath: folder,
+      ));
     }
     return found;
   }
@@ -256,30 +236,25 @@ class LibraryScanner {
     return episodes;
   }
 
-  /// Re-checks a single movie's folder for a trailer file. Used by the
-  /// per-item "Update" action so it can pick up a trailer added after the
-  /// initial scan, without re-scanning the whole library folder.
-  static Future<String?> findTrailerInFolder(String folderPath) async {
+  /// Looks for a trailer-named video file directly beside [mainFilePath]
+  /// (immediate siblings in the same folder only, not recursive). Used
+  /// both by [scanMovies] and by the per-item "Update" action, so a
+  /// trailer added after the initial scan can be picked up without
+  /// re-scanning the whole library folder.
+  static Future<String?> findTrailerInFolder(
+    String folderPath,
+    String mainFilePath,
+  ) async {
     final dir = Directory(folderPath);
     if (!await dir.exists()) return null;
-    await for (final entity
-        in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File && isVideoFile(entity.path)) {
+    await for (final entity in dir.list(followLinks: false)) {
+      if (entity is File &&
+          entity.path != mainFilePath &&
+          isVideoFile(entity.path)) {
         final name = p.basenameWithoutExtension(entity.path);
         if (_looksLikeTrailer(name)) return entity.path;
       }
     }
     return null;
-  }
-
-  static Future<List<File>> _allVideoFiles(Directory dir) async {
-    final files = <File>[];
-    await for (final entity
-        in dir.list(recursive: true, followLinks: false)) {
-      if (entity is File && isVideoFile(entity.path)) {
-        files.add(entity);
-      }
-    }
-    return files;
   }
 }
