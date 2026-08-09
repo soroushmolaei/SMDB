@@ -40,7 +40,7 @@ class CreditsSection extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
           child: Text(
             title,
             style: const TextStyle(
@@ -58,84 +58,120 @@ class CreditsSection extends StatelessWidget {
 /// TMDB-style top-billed grid: avatar, bold name, muted role underneath,
 /// three per row. Used below the hero on movie/show detail pages, one
 /// per role via [CreditsSection].
+///
+/// Uses Wrap rather than GridView: a GridView's row height has to be
+/// derived from a fixed width/height ratio, which made rows far taller
+/// than the avatar+text content actually needs on a wide desktop window.
+/// Wrap just sizes each chip to its own natural height instead.
 class CreditsGrid extends StatelessWidget {
   final List<CreditEntry> entries;
   final void Function(int personId) onTap;
 
   const CreditsGrid({super.key, required this.entries, required this.onTap});
 
+  static const _crossAxisCount = 3;
+  static const _spacing = 16.0;
+
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) return const SizedBox.shrink();
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 3,
-          crossAxisSpacing: 16,
-          mainAxisSpacing: 14,
-          childAspectRatio: 3.1,
-        ),
-        itemCount: entries.length,
-        itemBuilder: (context, index) {
-          final e = entries[index];
-          return InkWell(
-            onTap: e.personId == null ? null : () => onTap(e.personId!),
-            borderRadius: BorderRadius.circular(8),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 20,
-                  backgroundColor: Colors.white24,
-                  backgroundImage:
-                      e.photoPath != null && e.photoPath!.isNotEmpty
-                          ? smartImageProvider(e.photoPath!)
-                          : null,
-                  child: e.photoPath == null || e.photoPath!.isEmpty
-                      ? const Icon(Icons.person,
-                          size: 18, color: Colors.white54)
-                      : null,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final itemWidth = (constraints.maxWidth -
+                  _spacing * (_crossAxisCount - 1)) /
+              _crossAxisCount;
+          return Wrap(
+            spacing: _spacing,
+            runSpacing: 10,
+            children: [
+              for (final e in entries)
+                SizedBox(
+                  width: itemWidth,
+                  child: _CreditChip(entry: e, onTap: onTap),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        e.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                          decoration: e.personId == null
-                              ? null
-                              : TextDecoration.underline,
-                          decorationColor: Colors.white54,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        e.roleLabel,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white54,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
+            ],
           );
         },
+      ),
+    );
+  }
+}
+
+class _CreditChip extends StatefulWidget {
+  final CreditEntry entry;
+  final void Function(int personId) onTap;
+
+  const _CreditChip({required this.entry, required this.onTap});
+
+  @override
+  State<_CreditChip> createState() => _CreditChipState();
+}
+
+class _CreditChipState extends State<_CreditChip> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final e = widget.entry;
+    final clickable = e.personId != null;
+
+    return InkWell(
+      onTap: clickable ? () => widget.onTap(e.personId!) : null,
+      onHover: clickable ? (h) => setState(() => _hovering = h) : null,
+      borderRadius: BorderRadius.circular(8),
+      hoverColor: Colors.white.withValues(alpha: 0.08),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: Colors.white24,
+              backgroundImage: e.photoPath != null && e.photoPath!.isNotEmpty
+                  ? smartImageProvider(e.photoPath!)
+                  : null,
+              child: e.photoPath == null || e.photoPath!.isEmpty
+                  ? const Icon(Icons.person, size: 18, color: Colors.white54)
+                  : null,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    e.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                      decoration: clickable ? TextDecoration.underline : null,
+                      decorationColor:
+                          _hovering ? Colors.white : Colors.white54,
+                      decorationThickness: _hovering ? 1.6 : 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    e.roleLabel,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white54,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
