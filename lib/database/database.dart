@@ -309,6 +309,8 @@ class AppDatabase extends _$AppDatabase {
       (select(movies)..orderBy([(m) => OrderingTerm(expression: m.title)]))
           .watch();
 
+  Future<List<Movie>> getAllMovies() => select(movies).get();
+
   Future<Movie?> getMovieById(int id) =>
       (select(movies)..where((m) => m.id.equals(id))).getSingleOrNull();
 
@@ -454,11 +456,25 @@ class AppDatabase extends _$AppDatabase {
       (select(shows)..where((s) => s.folderPath.equals(folderPath)))
           .getSingleOrNull();
 
-  /// Inserts a new show, or updates the existing row for the same folder
-  /// path. Returns the row id either way.
+  /// Case-insensitive lookup by title. Done in Dart rather than SQL so it
+  /// doesn't depend on a specific collation being available -- a personal
+  /// library's show count is small enough that this is cheap.
+  Future<Show?> getShowByTitle(String title) async {
+    final normalized = title.trim().toLowerCase();
+    final all = await select(shows).get();
+    for (final s in all) {
+      if (s.title.trim().toLowerCase() == normalized) return s;
+    }
+    return null;
+  }
+
+  /// Inserts a new show, or updates the existing row for the same title
+  /// (case-insensitive). Keyed on title rather than folder path -- a
+  /// show's identity shouldn't depend on which specific folder(s) its
+  /// episode files happen to live in.
   Future<int> upsertShow(ShowsCompanion show) async {
-    final path = show.folderPath.value;
-    final existing = await getShowByFolderPath(path);
+    final title = show.title.value;
+    final existing = await getShowByTitle(title);
     if (existing != null) {
       await (update(shows)..where((s) => s.id.equals(existing.id)))
           .write(show);

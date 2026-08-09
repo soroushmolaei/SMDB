@@ -79,6 +79,42 @@ ParsedEpisode? parseSeasonEpisode(String name) {
   return null;
 }
 
+class ParsedShowEpisode {
+  final String title;
+  final int season;
+  final int episode;
+  ParsedShowEpisode(this.title, this.season, this.episode);
+}
+
+/// Extracts a show title together with its season/episode numbers from a
+/// single episode file name, e.g. "24 S01E01" -> ("24", 1, 1), or
+/// "Breaking Bad - S01E05 - Gray Matter" -> ("Breaking Bad", 1, 5), with
+/// the trailing per-episode subtitle ignored. Everything before the
+/// season/episode marker is taken as the title, so this only works when
+/// the file name itself starts with the show's name -- which is the
+/// standard convention this app expects episode files to follow. Returns
+/// null if no season/episode marker is found at all, or if nothing is
+/// left before it to use as a title.
+ParsedShowEpisode? parseShowTitleAndEpisode(String rawName) {
+  final name = rawName.replaceAll(RegExp(r'[._]'), ' ');
+
+  final seMatch = RegExp(r'[Ss](\d{1,2})[ ._-]?[Ee](\d{1,3})').firstMatch(name);
+  final match = seMatch ??
+      RegExp(r'(?<!\d)(\d{1,2})x(\d{2,3})(?!\d)').firstMatch(name);
+  if (match == null) return null;
+
+  var title = name.substring(0, match.start);
+  title = title.replaceAll(RegExp(r'\s+'), ' ').trim();
+  title = title.replaceAll(RegExp(r'[-\s]+$'), '').trim();
+  if (title.isEmpty) return null;
+
+  return ParsedShowEpisode(
+    title,
+    int.parse(match.group(1)!),
+    int.parse(match.group(2)!),
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Scan results
 // ---------------------------------------------------------------------------
@@ -118,6 +154,12 @@ class ScannedShow {
     required this.folderPath,
     required this.episodes,
   });
+}
+
+class _ShowAccumulator {
+  final String title;
+  final List<ScannedEpisode> episodes = [];
+  _ShowAccumulator(this.title);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,87 +209,85 @@ class LibraryScanner {
     return RegExp(r'\btrailer\b', caseSensitive: false).hasMatch(fileName);
   }
 
-  /// Scans [rootPath] for shows. Handles two folder layouts:
-  ///  - a library folder containing one subfolder per show, e.g.
-  ///    "TV/Breaking Bad/Season 01/...", "TV/24/Season 01/..."
-  ///  - [rootPath] itself being a single show's folder, e.g. pointing
-  ///    directly at ".../24" which contains "Season 01", "Season 02", ...
-  ///    In that case treating each season folder as its own "show" would be
-  ///    wrong, so this is detected and handled as one show instead.
+  /// Scans [rootPath] recursively, at any folder depth, for episode video
+  /// files. The show title, season, and episode number are all parsed
+  /// from each file's own name (e.g. "24 S01E01.mkv" -> show "24",
+  /// S01E01) -- never a parent folder -- so episodes are grouped into the
+  /// same show by that title regardless of how they're organized into
+  /// subfolders (one folder per season, everything loose, or anything
+  /// else). A file whose name has no recognizable season/episode marker
+  /// is skipped rather than guessed at.
   static Future<List<ScannedShow>> scanShows(String rootPath) async {
     final root = Directory(rootPath);
     if (!await root.exists()) return [];
 
-    final immediateDirs = await root
-        .list(followLinks: false)
-        .where((e) => e is Directory)
-        .cast<Directory>()
-        .toList();
+    // Keyed by a normalized (trimmed, lowercased) title so e.g. "24" and
+    // " 24 " group together; the first-seen casing is kept as the title
+    // shown to the user.
+    final byKey = <String, _ShowAccumulator>{};
 
-    if (immediateDirs.isNotEmpty &&
-        immediateDirs.every((d) => _looksLikeSeasonFolder(p.basename(d.path)))) {
-      final episodes = await _scanShowEpisodes(root);
-      if (episodes.isEmpty) return [];
-      return [
-        ScannedShow(
-          title: parseTitleAndYear(p.basename(root.path)).title,
-          folderPath: root.path,
-          episodes: episodes,
-        ),
-      ];
-    }
-
-    final shows = <ScannedShow>[];
-    for (final dir in immediateDirs) {
-      final episodes = await _scanShowEpisodes(dir);
-      if (episodes.isEmpty) continue;
-      shows.add(ScannedShow(
-        title: parseTitleAndYear(p.basename(dir.path)).title,
-        folderPath: dir.path,
-        episodes: episodes,
-      ));
-    }
-    return shows;
-  }
-
-  static bool _looksLikeSeasonFolder(String name) {
-    final trimmed = name.trim();
-    return RegExp(r'^season\s*\d{1,2}$', caseSensitive: false)
-            .hasMatch(trimmed) ||
-        RegExp(r'^s\d{1,2}$', caseSensitive: false).hasMatch(trimmed) ||
-        RegExp(r'^specials?$', caseSensitive: false).hasMatch(trimmed);
-  }
-
-  static Future<List<ScannedEpisode>> _scanShowEpisodes(
-    Directory showDir,
-  ) async {
-    final episodes = <ScannedEpisode>[];
     await for (final entity
-        in showDir.list(recursive: true, followLinks: false)) {
+        in root.list(recursive: true, followLinks: false)) {
       if (entity is! File || !isVideoFile(entity.path)) continue;
-      final se = parseSeasonEpisode(p.basenameWithoutExtension(entity.path));
-      if (se == null) continue;
-      episodes.add(ScannedEpisode(
-        season: se.season,
-        episode: se.episode,
+      final parsed =
+          parseShowTitleAndEpisode(p.basenameWithoutExtension(entity.path));
+      if (parsed == null) continue;
+
+      final key = parsed.title.toLowerCase();
+      final acc = byKey.putIfAbsent(key, () => _ShowAccumulator(parsed.title));
+      acc.episodes.add(ScannedEpisode(
+        season: parsed.season,
+        episode: parsed.episode,
         filePath: entity.path,
       ));
     }
-    return episodes;
+
+    return byKey.values
+        .map((acc) => ScannedShow(
+              title: acc.title,
+              folderPath: _commonAncestorFolder(
+                acc.episodes.map((e) => e.filePath).toList(),
+              ),
+              episodes: acc.episodes,
+            ))
+        .toList();
   }
 
-  /// Looks for a trailer-named video file directly beside [mainFilePath]
-  /// (immediate siblings in the same folder only, not recursive). Used
-  /// both by [scanMovies] and by the per-item "Update" action, so a
-  /// trailer added after the initial scan can be picked up without
-  /// re-scanning the whole library folder.
+  /// The deepest folder that contains every one of [filePaths]. Used as a
+  /// show's stored folder path when its episodes are parsed from
+  /// filenames rather than assumed to share one dedicated folder --
+  /// display-only (e.g. shown in Settings), not a dedup key, since a
+  /// show's identity now comes from its title.
+  static String _commonAncestorFolder(List<String> filePaths) {
+    if (filePaths.isEmpty) return '';
+    var common = p.dirname(filePaths.first).split(p.separator);
+    for (final path in filePaths.skip(1)) {
+      final parts = p.dirname(path).split(p.separator);
+      var i = 0;
+      while (i < common.length && i < parts.length && common[i] == parts[i]) {
+        i++;
+      }
+      if (i < common.length) common = common.sublist(0, i);
+    }
+    return common.join(p.separator);
+  }
+
+  /// Looks for a trailer-named video file anywhere under [folderPath]
+  /// (recursively, e.g. a "Trailers" subfolder inside the movie's own
+  /// folder), excluding [mainFilePath] itself. [folderPath] is always the
+  /// movie's own specific folder -- never a shared parent like a "2008"
+  /// category folder above it -- so this can't cross into a different
+  /// movie's files. Used both by [scanMovies] and by the per-item
+  /// "Update" action, so a trailer added after the initial scan can be
+  /// picked up without re-scanning the whole library folder.
   static Future<String?> findTrailerInFolder(
     String folderPath,
     String mainFilePath,
   ) async {
     final dir = Directory(folderPath);
     if (!await dir.exists()) return null;
-    await for (final entity in dir.list(followLinks: false)) {
+    await for (final entity
+        in dir.list(recursive: true, followLinks: false)) {
       if (entity is File &&
           entity.path != mainFilePath &&
           isVideoFile(entity.path)) {

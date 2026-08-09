@@ -103,6 +103,46 @@ class _AppShellState extends ConsumerState<AppShell> {
     }
   }
 
+  void _showDuplicateDialog(PendingMovieDuplicate dup) {
+    showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Possible duplicate'),
+        content: Text(
+          '"${dup.existing.title}"'
+          '${dup.existing.year != null ? ' (${dup.existing.year})' : ''} '
+          'is already in your library.\n\n'
+          'New file:\n${dup.incomingFilePath}\n\n'
+          'Existing file:\n${dup.existing.filePath}\n\n'
+          'Add this as a separate entry, or replace the existing one '
+          '(keeps its watched/favorite/rating status, just points it at '
+          'the new file)?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              ref
+                  .read(scanControllerProvider.notifier)
+                  .resolveDuplicate(false);
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Add as New'),
+          ),
+          FilledButton(
+            onPressed: () {
+              ref
+                  .read(scanControllerProvider.notifier)
+                  .resolveDuplicate(true);
+              Navigator.of(dialogContext).pop();
+            },
+            child: const Text('Replace Existing'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _createGroup() async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
@@ -144,6 +184,13 @@ class _AppShellState extends ConsumerState<AppShell> {
     final omdbConfigured = ref.watch(omdbServiceProvider) != null;
     final tmdbConfigured = ref.watch(tmdbServiceProvider) != null;
     final collections = ref.watch(collectionsStreamProvider).value ?? [];
+
+    ref.listen<ScanState>(scanControllerProvider, (previous, next) {
+      final dup = next.pendingDuplicate;
+      if (dup != null && previous?.pendingDuplicate != dup) {
+        _showDuplicateDialog(dup);
+      }
+    });
 
     return Scaffold(
       body: Row(

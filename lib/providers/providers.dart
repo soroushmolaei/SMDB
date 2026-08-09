@@ -209,6 +209,23 @@ final wikidataServiceProvider = Provider<WikidataService>((ref) {
 
 enum ScanStatus { idle, scanning, matching, done, error }
 
+/// A movie the scanner found that looks like a duplicate of one already
+/// in the library (same title + year, different file) -- surfaced so the
+/// UI can ask whether to add it as a separate entry or replace the
+/// existing one. The scan is paused while this is set.
+class PendingMovieDuplicate {
+  final Movie existing;
+  final String incomingTitle;
+  final int? incomingYear;
+  final String incomingFilePath;
+  const PendingMovieDuplicate({
+    required this.existing,
+    required this.incomingTitle,
+    required this.incomingYear,
+    required this.incomingFilePath,
+  });
+}
+
 class ScanState {
   final ScanStatus status;
   final String? currentItem;
@@ -217,6 +234,7 @@ class ScanState {
   final int matched;
   final int networkErrors;
   final String? lastError;
+  final PendingMovieDuplicate? pendingDuplicate;
 
   const ScanState({
     this.status = ScanStatus.idle,
@@ -226,6 +244,7 @@ class ScanState {
     this.matched = 0,
     this.networkErrors = 0,
     this.lastError,
+    this.pendingDuplicate,
   });
 
   ScanState copyWith({
@@ -236,6 +255,8 @@ class ScanState {
     int? matched,
     int? networkErrors,
     String? lastError,
+    PendingMovieDuplicate? pendingDuplicate,
+    bool clearPendingDuplicate = false,
   }) {
     return ScanState(
       status: status ?? this.status,
@@ -245,6 +266,9 @@ class ScanState {
       matched: matched ?? this.matched,
       networkErrors: networkErrors ?? this.networkErrors,
       lastError: lastError ?? this.lastError,
+      pendingDuplicate: clearPendingDuplicate
+          ? null
+          : (pendingDuplicate ?? this.pendingDuplicate),
     );
   }
 }
@@ -382,6 +406,48 @@ class ScanController extends StateNotifier<ScanState> {
 
   ScanController(this.db, this.ref) : super(const ScanState());
 
+  Completer<bool>? _duplicateResolution;
+
+  /// Called by the UI once the person picks "Add as New" (false) or
+  /// "Replace Existing" (true) in response to a
+  /// [ScanState.pendingDuplicate]. Unblocks the paused scan loop.
+  void resolveDuplicate(bool replace) {
+    _duplicateResolution?.complete(replace);
+    _duplicateResolution = null;
+    state = state.copyWith(clearPendingDuplicate: true);
+  }
+
+  Future<bool> _askAboutDuplicate(
+    Movie existing,
+    ScannedMovie item,
+  ) async {
+    final completer = Completer<bool>();
+    _duplicateResolution = completer;
+    state = state.copyWith(
+      pendingDuplicate: PendingMovieDuplicate(
+        existing: existing,
+        incomingTitle: item.title,
+        incomingYear: item.year,
+        incomingFilePath: item.filePath,
+      ),
+    );
+    return completer.future;
+  }
+
+  /// A movie already in the library with the same title + year as [item]
+  /// but a different file -- same file path just means this is an update
+  /// to something already scanned, not a duplicate to ask about.
+  Movie? _findDuplicate(List<Movie> knownMovies, ScannedMovie item) {
+    final normalizedTitle = item.title.trim().toLowerCase();
+    for (final m in knownMovies) {
+      if (m.filePath == item.filePath) continue;
+      if (m.title.trim().toLowerCase() != normalizedTitle) continue;
+      if (m.year != item.year) continue;
+      return m;
+    }
+    return null;
+  }
+
   /// Holds extracted metadata regardless of which source it came from, so
   /// the main loop doesn't need to care which API supplied it.
   Future<void> scanMovieFolder(String path) async {
@@ -400,20 +466,45 @@ class ScanController extends StateNotifier<ScanState> {
       lastError: null,
     );
 
+    // Snapshot of existing movies, kept in sync as this scan adds or
+    // replaces entries, so later items in the same scan can also be
+    // recognized as duplicates of ones found earlier in it.
+    var knownMovies = await db.getAllMovies();
+
     for (final item in items) {
       state = state.copyWith(currentItem: item.title);
+
+      int? replaceId;
+      final duplicate = _findDuplicate(knownMovies, item);
+      if (duplicate != null) {
+        final replace = await _askAboutDuplicate(duplicate, item);
+        if (replace) replaceId = duplicate.id;
+      }
 
       // Always save the basic scanned info first, so the file shows up in
       // the library even if no metadata source is reachable.
       int movieId;
       try {
-        movieId = await db.upsertMovie(MoviesCompanion.insert(
-          title: item.title,
-          filePath: item.filePath,
-          folderPath: item.folderPath,
-          year: Value(item.year),
-          trailerFilePath: Value(item.trailerFilePath),
-        ));
+        if (replaceId != null) {
+          await db.updateMovieDetails(
+            replaceId,
+            MoviesCompanion(
+              filePath: Value(item.filePath),
+              folderPath: Value(item.folderPath),
+              year: Value(item.year),
+              trailerFilePath: Value(item.trailerFilePath),
+            ),
+          );
+          movieId = replaceId;
+        } else {
+          movieId = await db.upsertMovie(MoviesCompanion.insert(
+            title: item.title,
+            filePath: item.filePath,
+            folderPath: item.folderPath,
+            year: Value(item.year),
+            trailerFilePath: Value(item.trailerFilePath),
+          ));
+        }
       } catch (_) {
         state = state.copyWith(processed: state.processed + 1);
         continue;
@@ -460,25 +551,28 @@ class ScanController extends StateNotifier<ScanState> {
       }
 
       if (match != null) {
-        movieId = await db.upsertMovie(MoviesCompanion.insert(
-          title: item.title,
-          filePath: item.filePath,
-          folderPath: item.folderPath,
-          year: Value(item.year),
-          trailerFilePath: Value(item.trailerFilePath),
-          tmdbId: Value(match.tmdbId),
-          imdbId: Value(match.imdbId),
-          overview: Value(match.overview),
-          posterPath: Value(match.posterPath),
-          backdropPath: Value(match.backdropPath),
-          rating: Value(match.rating),
-          runtimeMinutes: Value(match.runtimeMinutes),
-          genres: Value(match.genres),
-          contentRating: Value(match.contentRating),
-          director: Value(match.director),
-          writer: Value(match.writer),
-          castNames: Value(match.castNames),
-        ));
+        await db.updateMovieDetails(
+          movieId,
+          MoviesCompanion(
+            title: Value(item.title),
+            filePath: Value(item.filePath),
+            folderPath: Value(item.folderPath),
+            year: Value(item.year),
+            trailerFilePath: Value(item.trailerFilePath),
+            tmdbId: Value(match.tmdbId),
+            imdbId: Value(match.imdbId),
+            overview: Value(match.overview),
+            posterPath: Value(match.posterPath),
+            backdropPath: Value(match.backdropPath),
+            rating: Value(match.rating),
+            runtimeMinutes: Value(match.runtimeMinutes),
+            genres: Value(match.genres),
+            contentRating: Value(match.contentRating),
+            director: Value(match.director),
+            writer: Value(match.writer),
+            castNames: Value(match.castNames),
+          ),
+        );
         try {
           await db.setMovieCredits(movieId, match.credits);
         } catch (_) {
@@ -486,6 +580,17 @@ class ScanController extends StateNotifier<ScanState> {
         }
         unawaited(_saveMovieThumbnails(movieId, match));
         state = state.copyWith(matched: state.matched + 1);
+      }
+
+      // Keep the snapshot in sync so a later item in this same scan can
+      // still be recognized as a duplicate of this one.
+      final saved = await db.getMovieById(movieId);
+      if (saved != null) {
+        knownMovies = [
+          for (final m in knownMovies)
+            if (m.id != movieId) m,
+          saved,
+        ];
       }
 
       state = state.copyWith(processed: state.processed + 1);
