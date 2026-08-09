@@ -424,6 +424,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           '${(themeSettings.backdropOverlayOpacity * 100).round()}%',
                       onChanged: (v) => ref
                           .read(themeControllerProvider.notifier)
+                          .previewBackdropOverlayOpacity(v),
+                      onChangeEnd: (v) => ref
+                          .read(themeControllerProvider.notifier)
                           .setBackdropOverlayOpacity(v),
                     ),
                   ),

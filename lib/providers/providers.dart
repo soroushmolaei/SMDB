@@ -153,6 +153,13 @@ class ThemeController extends StateNotifier<ThemeSettings> {
     await AppConfigService.update(themeMode: mode.storageKey);
   }
 
+  /// Updates in-memory only, for smooth live feedback while a Slider is
+  /// being dragged. Call [setBackdropOverlayOpacity] once the drag ends
+  /// to actually persist the value.
+  void previewBackdropOverlayOpacity(double value) {
+    state = state.copyWith(backdropOverlayOpacity: value);
+  }
+
   Future<void> setBackdropOverlayOpacity(double value) async {
     state = state.copyWith(backdropOverlayOpacity: value);
     await AppConfigService.update(backdropOverlayOpacity: value);
