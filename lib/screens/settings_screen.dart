@@ -19,7 +19,10 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
+enum _SettingsCategory { appearance, api, database, storage, library }
+
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  _SettingsCategory _category = _SettingsCategory.appearance;
   final _apiKeyController = TextEditingController();
   final _omdbKeyController = TextEditingController();
   final _proxyHostController = TextEditingController();
@@ -325,9 +328,90 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           final onSurface = Theme.of(context).colorScheme.onSurface;
           final onSurfaceVariant =
               Theme.of(context).colorScheme.onSurfaceVariant;
-          return ListView(
+          return _buildContent(
+            themeSettings,
+            onSurface,
+            onSurfaceVariant,
+            dbPathAsync,
+            thumbnailBackfill,
+            foldersAsync,
+            scanState,
+            isScanning,
+          );
+        },
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, st) => Center(child: Text('Error: $e')),
+      ),
+    );
+  }
+
+  Widget _buildContent(
+    ThemeSettings themeSettings,
+    Color onSurface,
+    Color onSurfaceVariant,
+    AsyncValue<String> dbPathAsync,
+    ThumbnailBackfillState thumbnailBackfill,
+    AsyncValue<List<LibraryFolder>> foldersAsync,
+    ScanState scanState,
+    bool isScanning,
+  ) {
+    final sections = <_SettingsCategory, List<Widget>>{
+      _SettingsCategory.appearance:
+          _appearanceSection(themeSettings, onSurface, onSurfaceVariant),
+      _SettingsCategory.api: _apiSection(),
+      _SettingsCategory.database: _databaseSection(dbPathAsync),
+      _SettingsCategory.storage: _storageSection(thumbnailBackfill),
+      _SettingsCategory.library:
+          _librarySection(foldersAsync, scanState, isScanning),
+    };
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        NavigationRail(
+          selectedIndex: _SettingsCategory.values.indexOf(_category),
+          onDestinationSelected: (i) =>
+              setState(() => _category = _SettingsCategory.values[i]),
+          labelType: NavigationRailLabelType.all,
+          destinations: const [
+            NavigationRailDestination(
+              icon: Icon(Icons.palette_outlined),
+              label: Text('Appearance'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.cloud_outlined),
+              label: Text('API'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.dns_outlined),
+              label: Text('Database'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.sd_storage_outlined),
+              label: Text('Storage'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.folder_outlined),
+              label: Text('Library'),
+            ),
+          ],
+        ),
+        const VerticalDivider(width: 1),
+        Expanded(
+          child: ListView(
             padding: const EdgeInsets.all(16),
-            children: [
+            children: sections[_category]!,
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _appearanceSection(
+    ThemeSettings themeSettings,
+    Color onSurface,
+    Color onSurfaceVariant,
+  ) {
+    return [
               Text(
                 'Appearance',
                 style: TextStyle(
@@ -440,7 +524,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+    ];
+  }
+
+  List<Widget> _apiSection() {
+    return [
+              const Text(
+                'API',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 12),
               const Text(
                 'TMDB',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -577,7 +670,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 'next to the app, not inside the database file.',
                 style: TextStyle(color: Colors.white38, fontSize: 11),
               ),
-              const SizedBox(height: 32),
+    ];
+  }
+
+  List<Widget> _databaseSection(AsyncValue<String> dbPathAsync) {
+    return [
               const Text(
                 'Database',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -626,7 +723,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 32),
+    ];
+  }
+
+  List<Widget> _storageSection(ThumbnailBackfillState thumbnailBackfill) {
+    return [
               const Text(
                 'Offline Thumbnails',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
@@ -676,7 +777,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ],
               ),
-              const SizedBox(height: 32),
+    ];
+  }
+
+  List<Widget> _librarySection(
+    AsyncValue<List<LibraryFolder>> foldersAsync,
+    ScanState scanState,
+    bool isScanning,
+  ) {
+    return [
               Row(
                 children: [
                   const Text(
@@ -770,12 +879,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 loading: () => const CircularProgressIndicator(),
                 error: (e, st) => Text('Error: $e'),
               ),
-            ],
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, st) => Center(child: Text('Error: $e')),
-      ),
-    );
+    ];
   }
 }
