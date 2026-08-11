@@ -23,6 +23,17 @@ jobs:
       - name: Scaffold Windows platform folder
         run: flutter create --platforms=windows .
 
+      - name: Apply app icon
+        shell: pwsh
+        run: |
+          $dest = "windows\runner\resources\app_icon.ico"
+          Copy-Item -Path "assets\icon\app_icon.ico" -Destination $dest -Force
+          if (-not (Test-Path $dest)) {
+            Write-Error "Failed to copy app icon to $dest"
+            exit 1
+          }
+          Write-Host "Copied app icon to $dest"
+
       - name: Get packages
         run: flutter pub get
 
