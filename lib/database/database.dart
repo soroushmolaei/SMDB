@@ -178,6 +178,22 @@ class Awards extends Table {
   IntColumn get year => integer().nullable()();
 }
 
+/// A single watch event for a movie or episode. [itemType] is 'movie' or
+/// 'episode' (shows don't have their own watched state, same as
+/// elsewhere in this schema — tracked per episode instead). Append-only:
+/// the existing watched/watchedDate columns on Movies/Episodes still
+/// track "currently marked watched" + "most recent watch" for quick
+/// access and existing sort/filter code; this table is the full history
+/// behind that, so a rewatch doesn't overwrite the fact an earlier watch
+/// happened.
+@DataClassName('WatchEvent')
+class WatchHistory extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get itemType => text()(); // 'movie' or 'episode'
+  IntColumn get itemId => integer()();
+  DateTimeColumn get watchedAt => dateTime()();
+}
+
 /// Plain input for [AppDatabase.setMovieCredits] — not a table, just a
 /// transfer object from the scanner/matcher to the database layer.
 class MovieCreditInput {
@@ -220,13 +236,14 @@ class AwardInput {
     CollectionMovies,
     CollectionShows,
     Awards,
+    WatchHistory,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 11;
+  int get schemaVersion => 12;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -282,6 +299,37 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(shows, shows.posterThumbnail);
             await m.addColumn(shows, shows.backdropThumbnail);
           }
+          if (from < 12) {
+            await m.createTable(watchHistory);
+            // Backfill: anything already marked watched gets one history
+            // entry (using its existing watchedDate if set), so rewatch
+            // counts don't start at zero for a library that's already
+            // been in use.
+            final watchedMovies = await (select(movies)
+                  ..where((mv) => mv.watched.equals(true)))
+                .get();
+            for (final mv in watchedMovies) {
+              await into(watchHistory).insert(
+                WatchHistoryCompanion.insert(
+                  itemType: 'movie',
+                  itemId: mv.id,
+                  watchedAt: mv.watchedDate ?? DateTime.now(),
+                ),
+              );
+            }
+            final watchedEpisodes = await (select(episodes)
+                  ..where((ep) => ep.watched.equals(true)))
+                .get();
+            for (final ep in watchedEpisodes) {
+              await into(watchHistory).insert(
+                WatchHistoryCompanion.insert(
+                  itemType: 'episode',
+                  itemId: ep.id,
+                  watchedAt: ep.watchedDate ?? DateTime.now(),
+                ),
+              );
+            }
+          }
         },
       );
 
@@ -332,13 +380,15 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> setMovieWatched(int id, bool watched) =>
-      (update(movies)..where((m) => m.id.equals(id))).write(
-        MoviesCompanion(
-          watched: Value(watched),
-          watchedDate: Value(watched ? DateTime.now() : null),
-        ),
-      );
+  Future<void> setMovieWatched(int id, bool watched) async {
+    await (update(movies)..where((m) => m.id.equals(id))).write(
+      MoviesCompanion(
+        watched: Value(watched),
+        watchedDate: Value(watched ? DateTime.now() : null),
+      ),
+    );
+    if (watched) await _seedFirstWatchIfNone('movie', id);
+  }
 
   Future<void> setPersonalRating(int id, double? rating) =>
       (update(movies)..where((m) => m.id.equals(id)))
@@ -502,6 +552,9 @@ class AppDatabase extends _$AppDatabase {
       (select(episodes)..where((e) => e.filePath.equals(filePath)))
           .getSingleOrNull();
 
+  Future<Episode?> getEpisodeById(int id) =>
+      (select(episodes)..where((e) => e.id.equals(id))).getSingleOrNull();
+
   Future<void> upsertEpisode(EpisodesCompanion episode) async {
     final path = episode.filePath.value;
     final existing = await getEpisodeByFilePath(path);
@@ -513,13 +566,15 @@ class AppDatabase extends _$AppDatabase {
     }
   }
 
-  Future<void> setEpisodeWatched(int id, bool watched) =>
-      (update(episodes)..where((e) => e.id.equals(id))).write(
-        EpisodesCompanion(
-          watched: Value(watched),
-          watchedDate: Value(watched ? DateTime.now() : null),
-        ),
-      );
+  Future<void> setEpisodeWatched(int id, bool watched) async {
+    await (update(episodes)..where((e) => e.id.equals(id))).write(
+      EpisodesCompanion(
+        watched: Value(watched),
+        watchedDate: Value(watched ? DateTime.now() : null),
+      ),
+    );
+    if (watched) await _seedFirstWatchIfNone('episode', id);
+  }
 
   /// Fills in rich per-episode metadata found after the initial file scan
   /// (title, overview, air date, thumbnail, rating, guest stars), matched
@@ -720,6 +775,101 @@ class AppDatabase extends _$AppDatabase {
             ..where((c) =>
                 c.collectionId.equals(collectionId) & c.showId.equals(showId)))
           .go();
+
+  // --- Watch history -----------------------------------------------------
+
+  Stream<List<WatchEvent>> watchHistoryFor(String itemType, int itemId) =>
+      (select(watchHistory)
+            ..where(
+                (w) => w.itemType.equals(itemType) & w.itemId.equals(itemId))
+            ..orderBy([
+              (w) => OrderingTerm(
+                    expression: w.watchedAt,
+                    mode: OrderingMode.desc,
+                  ),
+            ]))
+          .watch();
+
+  /// Used by [setMovieWatched]/[setEpisodeWatched]: the familiar
+  /// star/checkmark toggle should keep contributing "at least one watch"
+  /// to the history the first time it's turned on, but flipping it on and
+  /// off again shouldn't silently log extra watches -- only [logWatch]
+  /// (an explicit "log a watch" action) does that.
+  Future<void> _seedFirstWatchIfNone(String itemType, int itemId) async {
+    final existing = await (select(watchHistory)
+          ..where(
+              (w) => w.itemType.equals(itemType) & w.itemId.equals(itemId))
+          ..limit(1))
+        .getSingleOrNull();
+    if (existing == null) {
+      await into(watchHistory).insert(
+        WatchHistoryCompanion.insert(
+          itemType: itemType,
+          itemId: itemId,
+          watchedAt: DateTime.now(),
+        ),
+      );
+    }
+  }
+
+  /// Explicitly logs a watch (e.g. a rewatch, or backdating one that
+  /// wasn't logged at the time) and keeps the item's own watched/
+  /// watchedDate columns pointing at the most recent entry.
+  Future<void> logWatch(
+    String itemType,
+    int itemId,
+    DateTime watchedAt,
+  ) async {
+    await into(watchHistory).insert(
+      WatchHistoryCompanion.insert(
+        itemType: itemType,
+        itemId: itemId,
+        watchedAt: watchedAt,
+      ),
+    );
+    await _syncWatchedFromHistory(itemType, itemId);
+  }
+
+  /// Removes a single history entry (e.g. one logged by mistake) and
+  /// keeps watched/watchedDate consistent with whatever remains -- if
+  /// that was the only entry, the item goes back to "not watched".
+  Future<void> deleteWatchEvent(
+    String itemType,
+    int itemId,
+    int eventId,
+  ) async {
+    await (delete(watchHistory)..where((w) => w.id.equals(eventId))).go();
+    await _syncWatchedFromHistory(itemType, itemId);
+  }
+
+  Future<void> _syncWatchedFromHistory(String itemType, int itemId) async {
+    final remaining = await (select(watchHistory)
+          ..where(
+              (w) => w.itemType.equals(itemType) & w.itemId.equals(itemId))
+          ..orderBy([
+            (w) => OrderingTerm(
+                  expression: w.watchedAt,
+                  mode: OrderingMode.desc,
+                ),
+          ]))
+        .get();
+    final mostRecent = remaining.isEmpty ? null : remaining.first.watchedAt;
+    if (itemType == 'movie') {
+      await (update(movies)..where((m) => m.id.equals(itemId))).write(
+        MoviesCompanion(
+          watched: Value(remaining.isNotEmpty),
+          watchedDate: Value(mostRecent),
+        ),
+      );
+    } else {
+      await (update(episodes)..where((e) => e.id.equals(itemId))).write(
+        EpisodesCompanion(
+          watched: Value(remaining.isNotEmpty),
+          watchedDate: Value(mostRecent),
+        ),
+      );
+    }
+  }
 
   // --- Awards (lazily fetched from Wikidata) --------------------------------
 

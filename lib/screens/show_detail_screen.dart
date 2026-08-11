@@ -13,6 +13,7 @@ import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
+import '../widgets/watch_history_section.dart';
 import 'add_to_group_dialog.dart';
 import 'edit_show_screen.dart';
 import 'genre_shows_screen.dart';
@@ -627,7 +628,6 @@ class _EpisodeTile extends ConsumerWidget {
       onTap: () {
         final hasOverview =
             episode.overview != null && episode.overview!.isNotEmpty;
-        if (!hasOverview && episode.rating == null) return;
         showDialog(
           context: context,
           builder: (dialogContext) => AlertDialog(
@@ -749,6 +749,14 @@ class _EpisodeTile extends ConsumerWidget {
                           error: (e, st) => const SizedBox.shrink(),
                         );
                       },
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Divider(height: 1, color: Colors.white24),
+                    ),
+                    WatchHistorySection(
+                      itemType: 'episode',
+                      itemId: episode.id,
                     ),
                   ],
                 ),

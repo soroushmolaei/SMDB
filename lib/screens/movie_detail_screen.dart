@@ -11,6 +11,7 @@ import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
+import '../widgets/watch_history_section.dart';
 import 'add_to_group_dialog.dart';
 import 'edit_movie_screen.dart';
 import 'genre_movies_screen.dart';
@@ -82,6 +83,12 @@ class MovieDetailScreen extends ConsumerWidget {
                       onToggleWatched: () => ref
                           .read(databaseProvider)
                           .setMovieWatched(movie.id, !movie.watched),
+                      onViewHistory: () => showWatchHistoryDialog(
+                        context,
+                        itemType: 'movie',
+                        itemId: movie.id,
+                        title: movie.title,
+                      ),
                       onAddToGroup: () => showAddToGroupDialog(
                         context,
                         ref,
@@ -379,6 +386,7 @@ class _MovieHero extends StatelessWidget {
   final bool watched;
   final VoidCallback onToggleFavorite;
   final VoidCallback onToggleWatched;
+  final VoidCallback onViewHistory;
   final VoidCallback onAddToGroup;
 
   const _MovieHero({
@@ -395,6 +403,7 @@ class _MovieHero extends StatelessWidget {
     required this.watched,
     required this.onToggleFavorite,
     required this.onToggleWatched,
+    required this.onViewHistory,
     required this.onAddToGroup,
   });
 
@@ -562,6 +571,11 @@ class _MovieHero extends StatelessWidget {
                                   ? 'Watched'
                                   : 'Mark as watched',
                               onPressed: onToggleWatched,
+                            ),
+                            HeroIconButton(
+                              icon: const Icon(Icons.history),
+                              tooltip: 'Watch history',
+                              onPressed: onViewHistory,
                             ),
                             HeroIconButton(
                               icon: const Icon(

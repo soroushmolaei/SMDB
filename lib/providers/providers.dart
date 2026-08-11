@@ -92,6 +92,12 @@ final awardsProvider =
   return ref.watch(databaseProvider).watchAwardsFor(key.$1, key.$2);
 });
 
+/// Key is (itemType, itemId) e.g. ('movie', 42) or ('episode', 108).
+final watchHistoryProvider =
+    StreamProvider.family<List<WatchEvent>, (String, int)>((ref, key) {
+  return ref.watch(databaseProvider).watchHistoryFor(key.$1, key.$2);
+});
+
 // ---------------------------------------------------------------------------
 // Settings
 // ---------------------------------------------------------------------------
