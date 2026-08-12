@@ -25,8 +25,7 @@ class PersonalRatingStars extends StatefulWidget {
 class _PersonalRatingStarsState extends State<PersonalRatingStars> {
   int? _hoverValue;
 
-  int? get _snappedValue =>
-      widget.value == null ? null : widget.value!.clamp(1.0, 10.0).round();
+  int? get _snappedValue => widget.value?.clamp(1.0, 10.0).round();
 
   int _valueForTapX(double dx, int starIndex) {
     final isLeftHalf = dx < widget.size / 2;
