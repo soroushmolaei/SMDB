@@ -9,6 +9,7 @@ import '../widgets/awards_section.dart';
 import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
+import '../widgets/personal_rating_stars.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
 import '../widgets/watch_history_section.dart';
@@ -77,6 +78,10 @@ class MovieDetailScreen extends ConsumerWidget {
                       posterThumbnail: movie.posterThumbnail,
                       isFavorite: movie.isFavorite,
                       watched: movie.watched,
+                      personalRating: movie.personalRating,
+                      onSetPersonalRating: (value) => ref
+                          .read(databaseProvider)
+                          .setPersonalRating(movie.id, value),
                       onToggleFavorite: () => ref
                           .read(databaseProvider)
                           .setMovieFavorite(movie.id, !movie.isFavorite),
@@ -388,6 +393,8 @@ class _MovieHero extends StatelessWidget {
   final VoidCallback onToggleWatched;
   final VoidCallback onViewHistory;
   final VoidCallback onAddToGroup;
+  final double? personalRating;
+  final ValueChanged<double?> onSetPersonalRating;
 
   const _MovieHero({
     required this.title,
@@ -405,6 +412,8 @@ class _MovieHero extends StatelessWidget {
     required this.onToggleWatched,
     required this.onViewHistory,
     required this.onAddToGroup,
+    required this.personalRating,
+    required this.onSetPersonalRating,
   });
 
   @override
@@ -549,6 +558,27 @@ class _MovieHero extends StatelessWidget {
                             ],
                           ),
                         ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Row(
+                          children: [
+                            PersonalRatingStars(
+                              value: personalRating,
+                              onChanged: onSetPersonalRating,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Your\nRating',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                height: 1.1,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.only(top: 10),
                         child: Row(
