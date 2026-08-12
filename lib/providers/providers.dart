@@ -476,9 +476,18 @@ class ScanController extends StateNotifier<ScanState> {
     // replaces entries, so later items in the same scan can also be
     // recognized as duplicates of ones found earlier in it.
     var knownMovies = await db.getAllMovies();
+    final knownFilePaths = knownMovies.map((m) => m.filePath).toSet();
 
     for (final item in items) {
       state = state.copyWith(currentItem: item.title);
+
+      // Already in the library from a previous scan of this exact file --
+      // leave it alone: no re-fetch, no overwriting anything that might
+      // have been edited by hand since (title, personal rating, etc.).
+      if (knownFilePaths.contains(item.filePath)) {
+        state = state.copyWith(processed: state.processed + 1);
+        continue;
+      }
 
       int? replaceId;
       final duplicate = _findDuplicate(knownMovies, item);
@@ -775,6 +784,9 @@ class ScanController extends StateNotifier<ScanState> {
     state = const ScanState(status: ScanStatus.scanning);
 
     final shows = await LibraryScanner.scanShows(path);
+    final knownEpisodePaths =
+        (await db.getAllEpisodesOnce()).map((e) => e.filePath).toSet();
+
     state = state.copyWith(
       status: ScanStatus.matching,
       total: shows.length,
@@ -787,13 +799,27 @@ class ScanController extends StateNotifier<ScanState> {
     for (final show in shows) {
       state = state.copyWith(currentItem: show.title);
 
+      final newEpisodes = show.episodes
+          .where((ep) => !knownEpisodePaths.contains(ep.filePath))
+          .toList();
+
+      // Nothing new under this title since the last scan -- leave the show
+      // and its episodes exactly as they are, no re-fetch.
+      if (newEpisodes.isEmpty) {
+        state = state.copyWith(processed: state.processed + 1);
+        continue;
+      }
+
+      final existingShow = await db.getShowByTitle(show.title);
+
       int showId;
       try {
-        showId = await db.upsertShow(ShowsCompanion.insert(
-          title: show.title,
-          folderPath: show.folderPath,
-        ));
-        for (final ep in show.episodes) {
+        showId = existingShow?.id ??
+            await db.upsertShow(ShowsCompanion.insert(
+              title: show.title,
+              folderPath: show.folderPath,
+            ));
+        for (final ep in newEpisodes) {
           await db.upsertEpisode(EpisodesCompanion.insert(
             showId: showId,
             seasonNumber: ep.season,
@@ -807,59 +833,75 @@ class ScanController extends StateNotifier<ScanState> {
       }
 
       _ShowMatch? match;
+      final alreadyMatched =
+          existingShow?.tmdbId != null || existingShow?.imdbId != null;
 
-      if (omdb != null) {
-        try {
-          final tmdbForEnrichment =
-              _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
-                  ? tmdb
-                  : null;
-          match = await _matchShowOmdb(omdb, tmdbForEnrichment, show.title);
-        } catch (e) {
-          state = state.copyWith(
-            networkErrors: state.networkErrors + 1,
-            lastError: 'OMDb: $e',
-          );
+      // Only spend a fresh API match on this show if it hasn't been
+      // matched before -- an already-matched show keeps its existing
+      // info untouched and just gets its new episodes enriched below.
+      if (!alreadyMatched) {
+        if (omdb != null) {
+          try {
+            final tmdbForEnrichment =
+                _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
+                    ? tmdb
+                    : null;
+            match =
+                await _matchShowOmdb(omdb, tmdbForEnrichment, show.title);
+          } catch (e) {
+            state = state.copyWith(
+              networkErrors: state.networkErrors + 1,
+              lastError: 'OMDb: $e',
+            );
+          }
+        }
+
+        if (match == null &&
+            tmdb != null &&
+            _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold) {
+          try {
+            match = await _matchShowTmdb(tmdb, show.title);
+            _tmdbConsecutiveFailures = 0;
+          } catch (e) {
+            _tmdbConsecutiveFailures++;
+            state = state.copyWith(
+              networkErrors: state.networkErrors + 1,
+              lastError: 'TMDB: $e',
+            );
+          }
+        }
+
+        if (match != null) {
+          await db.upsertShow(ShowsCompanion.insert(
+            title: show.title,
+            folderPath: show.folderPath,
+            tmdbId: Value(match.tmdbId),
+            imdbId: Value(match.imdbId),
+            overview: Value(match.overview),
+            posterPath: Value(match.posterPath),
+            backdropPath: Value(match.backdropPath),
+            rating: Value(match.rating),
+            genres: Value(match.genres),
+            contentRating: Value(match.contentRating),
+            status: Value(match.status),
+          ));
+          try {
+            await db.setShowCredits(showId, match.credits);
+          } catch (_) {
+            // Credits are a nice-to-have; don't fail the whole item over it.
+          }
+          unawaited(_saveShowThumbnails(showId, match));
+          state = state.copyWith(matched: state.matched + 1);
         }
       }
 
-      if (match == null &&
-          tmdb != null &&
-          _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold) {
-        try {
-          match = await _matchShowTmdb(tmdb, show.title);
-          _tmdbConsecutiveFailures = 0;
-        } catch (e) {
-          _tmdbConsecutiveFailures++;
-          state = state.copyWith(
-            networkErrors: state.networkErrors + 1,
-            lastError: 'TMDB: $e',
-          );
-        }
-      }
-
-      if (match != null) {
-        await db.upsertShow(ShowsCompanion.insert(
-          title: show.title,
-          folderPath: show.folderPath,
-          tmdbId: Value(match.tmdbId),
-          imdbId: Value(match.imdbId),
-          overview: Value(match.overview),
-          posterPath: Value(match.posterPath),
-          backdropPath: Value(match.backdropPath),
-          rating: Value(match.rating),
-          genres: Value(match.genres),
-          contentRating: Value(match.contentRating),
-          status: Value(match.status),
-        ));
-        try {
-          await db.setShowCredits(showId, match.credits);
-        } catch (_) {
-          // Credits are a nice-to-have; don't fail the whole item over it.
-        }
-        unawaited(_saveShowThumbnails(showId, match));
-
-        final seasonNumbers = show.episodes.map((e) => e.season).toSet();
+      // Enrich only the seasons the new episodes belong to, using
+      // whichever tmdbId/imdbId the show has -- freshly matched above, or
+      // already on file from a previous scan.
+      final tmdbIdForEpisodes = match?.tmdbId ?? existingShow?.tmdbId;
+      final imdbIdForEpisodes = match?.imdbId ?? existingShow?.imdbId;
+      if (tmdbIdForEpisodes != null || imdbIdForEpisodes != null) {
+        final seasonNumbers = newEpisodes.map((e) => e.season).toSet();
         final tmdbForEpisodes =
             _tmdbConsecutiveFailures < _tmdbCircuitBreakerThreshold
                 ? tmdb
@@ -868,16 +910,14 @@ class ScanController extends StateNotifier<ScanState> {
           await _enrichEpisodes(
             showId,
             seasonNumbers,
-            tmdbId: match.tmdbId,
-            imdbId: match.imdbId,
+            tmdbId: tmdbIdForEpisodes,
+            imdbId: imdbIdForEpisodes,
             tmdb: tmdbForEpisodes,
             omdb: omdb,
           );
         } catch (_) {
           // Episode-level enrichment is best-effort.
         }
-
-        state = state.copyWith(matched: state.matched + 1);
       }
 
       state = state.copyWith(processed: state.processed + 1);

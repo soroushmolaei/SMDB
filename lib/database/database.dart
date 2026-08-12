@@ -545,6 +545,8 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Episode>> watchAllEpisodes() => select(episodes).watch();
 
+  Future<List<Episode>> getAllEpisodesOnce() => select(episodes).get();
+
   Future<List<Episode>> getEpisodesForShowOnce(int showId) =>
       (select(episodes)..where((e) => e.showId.equals(showId))).get();
 
