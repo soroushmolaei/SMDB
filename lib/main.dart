@@ -1,6 +1,7 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'providers/providers.dart';
 import 'screens/app_shell.dart';
@@ -9,9 +10,24 @@ import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await windowManager.ensureInitialized();
+
   // Load once, before the first frame — otherwise the app would flash the
   // default theme for a moment while smdb_config.json loads.
   final initialConfig = await AppConfigService.load();
+
+  // Hide the native title bar and its min/max/close buttons — AppShell
+  // draws its own via CustomTitleBar so the whole window reads as one
+  // surface instead of a native OS bar sitting on top of a dark app.
+  const windowOptions = WindowOptions(
+    backgroundColor: Colors.transparent,
+    titleBarStyle: TitleBarStyle.hidden,
+    windowButtonVisibility: false,
+  );
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+  });
 
   runApp(
     ProviderScope(

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
+import '../widgets/custom_title_bar.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
 import 'genres_list_screen.dart';
@@ -193,10 +194,14 @@ class _AppShellState extends ConsumerState<AppShell> {
     });
 
     return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Column(
         children: [
-          _Sidebar(
+          const CustomTitleBar(),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _Sidebar(
             selected: _section,
             onSelect: (s) => setState(() {
               _section = s;
@@ -260,6 +265,9 @@ class _AppShellState extends ConsumerState<AppShell> {
                 ),
               ],
             ),
+          ),
+        ],
+      ),
           ),
         ],
       ),
@@ -419,8 +427,11 @@ class _Sidebar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(14, 16, 14, 8),
             child: Row(
               children: [
-                const Icon(Icons.movie_creation_outlined,
-                    color: Color(0xFF6C5CE7)),
+                Image.asset(
+                  'assets/icon/app_icon.png',
+                  width: 24,
+                  height: 24,
+                ),
                 const SizedBox(width: 8),
                 const Expanded(
                   child: Text(
