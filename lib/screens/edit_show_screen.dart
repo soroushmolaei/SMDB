@@ -39,6 +39,8 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
   final _contentRating = TextEditingController();
   final _status = TextEditingController();
   final _rating = TextEditingController();
+  final _tmdbId = TextEditingController();
+  final _imdbId = TextEditingController();
   final _rematchQuery = TextEditingController();
   final _folderPath = TextEditingController();
   final _posterPath = TextEditingController();
@@ -47,7 +49,6 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
   bool _saving = false;
   bool _searching = false;
   List<_Candidate> _candidates = [];
-  int? _pendingTmdbId;
 
   @override
   void dispose() {
@@ -57,6 +58,8 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
     _contentRating.dispose();
     _status.dispose();
     _rating.dispose();
+    _tmdbId.dispose();
+    _imdbId.dispose();
     _rematchQuery.dispose();
     _folderPath.dispose();
     _posterPath.dispose();
@@ -72,11 +75,12 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
     _contentRating.text = show.contentRating ?? '';
     _status.text = show.status ?? '';
     _rating.text = show.rating?.toString() ?? '';
+    _tmdbId.text = show.tmdbId?.toString() ?? '';
+    _imdbId.text = show.imdbId ?? '';
     _rematchQuery.text = show.title;
     _folderPath.text = show.folderPath;
     _posterPath.text = show.posterPath ?? '';
     _backdropPath.text = show.backdropPath ?? '';
-    _pendingTmdbId = show.tmdbId;
     _loaded = true;
   }
 
@@ -139,53 +143,102 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
     });
   }
 
+  /// Populates the form from a known TMDB id -- shared by picking a search
+  /// candidate and by typing/pasting an id directly into the ID field.
+  Future<void> _applyTmdbDetails(int tmdbId) async {
+    final tmdb = ref.read(tmdbServiceProvider);
+    if (tmdb == null) throw Exception('TMDB is not configured');
+    final details = await tmdb.getShowDetails(tmdbId);
+    _title.text = (details['name'] as String?) ?? _title.text;
+    _overview.text = details['overview'] as String? ?? '';
+    final genreList = (details['genres'] as List<dynamic>?) ?? [];
+    _genres.text = genreList.map((g) => g['name']).join(', ');
+    _contentRating.text = TmdbService.extractShowCertification(details) ?? '';
+    _status.text = details['status'] as String? ?? '';
+    final rating = (details['vote_average'] as num?)?.toDouble();
+    _rating.text = rating?.toString() ?? '';
+    _posterPath.text =
+        TmdbService.imageUrl(details['poster_path'] as String?) ?? '';
+    _backdropPath.text = TmdbService.imageUrl(
+          details['backdrop_path'] as String?,
+          size: 'w1280',
+        ) ??
+        '';
+    final externalIds = details['external_ids'] as Map<String, dynamic>?;
+    _tmdbId.text = '$tmdbId';
+    _imdbId.text = (externalIds?['imdb_id'] as String?) ?? _imdbId.text;
+  }
+
+  /// Populates the form from a known IMDb id -- shared by picking a search
+  /// candidate and by typing/pasting an id directly into the ID field.
+  Future<void> _applyOmdbDetails(String imdbId) async {
+    final omdb = ref.read(omdbServiceProvider);
+    if (omdb == null) throw Exception('OMDb is not configured');
+    final data = await omdb.getByImdbId(imdbId);
+    if (data == null) throw Exception('No OMDb result for $imdbId');
+    _title.text = (data['Title'] as String?) ?? _title.text;
+    _overview.text = OmdbService.cleanText(data['Plot'] as String?) ?? '';
+    _genres.text = OmdbService.cleanText(data['Genre'] as String?) ?? '';
+    _contentRating.text = OmdbService.cleanText(data['Rated'] as String?) ?? '';
+    _rating.text = data['imdbRating'] as String? ?? '';
+    final totalSeasons = data['totalSeasons'];
+    _status.text = (data['Status'] as String?) ??
+        (totalSeasons != null ? '$totalSeasons seasons' : '');
+    _posterPath.text = OmdbService.posterUrl(data['Poster'] as String?) ?? '';
+    _imdbId.text = imdbId;
+    _tmdbId.text = '';
+  }
+
   Future<void> _applyCandidate(_Candidate c) async {
     setState(() => _searching = true);
     try {
       if (c.source == 'OMDb') {
-        final omdb = ref.read(omdbServiceProvider);
-        final data = await omdb!.getByImdbId(c.id);
-        if (data != null) {
-          _title.text = (data['Title'] as String?) ?? _title.text;
-          _overview.text = OmdbService.cleanText(data['Plot'] as String?) ?? '';
-          _genres.text = OmdbService.cleanText(data['Genre'] as String?) ?? '';
-          _contentRating.text =
-              OmdbService.cleanText(data['Rated'] as String?) ?? '';
-          _rating.text = data['imdbRating'] as String? ?? '';
-          final totalSeasons = data['totalSeasons'];
-          _status.text = (data['Status'] as String?) ??
-              (totalSeasons != null ? '$totalSeasons seasons' : '');
-          _posterPath.text =
-              OmdbService.posterUrl(data['Poster'] as String?) ?? '';
-          _pendingTmdbId = null;
-        }
+        await _applyOmdbDetails(c.id);
       } else {
-        final tmdb = ref.read(tmdbServiceProvider);
-        final tmdbId = int.parse(c.id);
-        final details = await tmdb!.getShowDetails(tmdbId);
-        _title.text = (details['name'] as String?) ?? _title.text;
-        _overview.text = details['overview'] as String? ?? '';
-        final genreList = (details['genres'] as List<dynamic>?) ?? [];
-        _genres.text = genreList.map((g) => g['name']).join(', ');
-        _contentRating.text =
-            TmdbService.extractShowCertification(details) ?? '';
-        _status.text = details['status'] as String? ?? '';
-        final rating = (details['vote_average'] as num?)?.toDouble();
-        _rating.text = rating?.toString() ?? '';
-        _posterPath.text =
-            TmdbService.imageUrl(details['poster_path'] as String?) ?? '';
-        _backdropPath.text = TmdbService.imageUrl(
-              details['backdrop_path'] as String?,
-              size: 'w1280',
-            ) ??
-            '';
-        _pendingTmdbId = tmdbId;
+        await _applyTmdbDetails(int.parse(c.id));
       }
       if (!mounted) return;
       setState(() {
         _candidates = [];
         _searching = false;
       });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Applied — review the fields, then tap Save'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _searching = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to fetch details: $e')),
+      );
+    }
+  }
+
+  /// Fetches details for whatever id is currently typed into the ID
+  /// fields -- for when you already know the correct TMDB/IMDb id instead
+  /// of searching by a title that might turn up the same wrong result
+  /// again.
+  Future<void> _fetchByEnteredId() async {
+    final tmdbIdText = _tmdbId.text.trim();
+    final imdbIdText = _imdbId.text.trim();
+    final tmdbId = int.tryParse(tmdbIdText);
+    if (tmdbId == null && imdbIdText.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter a TMDB or IMDb id first')),
+      );
+      return;
+    }
+    setState(() => _searching = true);
+    try {
+      if (tmdbId != null) {
+        await _applyTmdbDetails(tmdbId);
+      } else {
+        await _applyOmdbDetails(imdbIdText);
+      }
+      if (!mounted) return;
+      setState(() => _searching = false);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Applied — review the fields, then tap Save'),
@@ -227,7 +280,8 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
         folderPath: Value(_folderPath.text.trim()),
         posterPath: Value(_nullIfEmpty(_posterPath.text)),
         backdropPath: Value(_nullIfEmpty(_backdropPath.text)),
-        tmdbId: Value(_pendingTmdbId),
+        tmdbId: Value(int.tryParse(_tmdbId.text.trim())),
+        imdbId: Value(_nullIfEmpty(_imdbId.text)),
       ),
     );
     if (mounted) Navigator.of(context).pop();
@@ -375,6 +429,71 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                         ),
                       ),
                     ],
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.05),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Matched ID',
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Already know the right one? Set it directly. Once '
+                      'set, Update on the detail page only pulls data for '
+                      'this exact id — it will never re-search and land on '
+                      'a different title again.',
+                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextField(
+                            controller: _tmdbId,
+                            keyboardType: TextInputType.number,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              labelText: 'TMDB ID',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: _imdbId,
+                            decoration: const InputDecoration(
+                              isDense: true,
+                              labelText: 'IMDb ID (tt...)',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: _searching ? null : _fetchByEnteredId,
+                          child: _searching
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 2),
+                                )
+                              : const Text('Fetch'),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),

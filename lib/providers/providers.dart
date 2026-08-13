@@ -693,6 +693,50 @@ class ScanController extends StateNotifier<ScanState> {
     );
   }
 
+  /// Fetches a movie by a known IMDb id directly (no title search) -- used
+  /// once a movie's imdbId is pinned, either by the original match or a
+  /// manual correction in Edit, so a refresh can never drift to a
+  /// different title.
+  Future<_MovieMatch?> _matchMovieOmdbById(
+    OmdbService omdb,
+    String imdbId,
+  ) async {
+    final data = await omdb.getByImdbId(imdbId);
+    if (data == null) return null;
+
+    final credits = <MovieCreditInput>[];
+    void addNames(String? raw, String role) {
+      final cleaned = OmdbService.cleanText(raw);
+      if (cleaned == null) return;
+      for (final name in cleaned.split(',')) {
+        final trimmed = name.trim();
+        if (trimmed.isNotEmpty) {
+          credits.add(MovieCreditInput(name: trimmed, role: role));
+        }
+      }
+    }
+
+    addNames(data['Director'] as String?, 'director');
+    addNames(data['Writer'] as String?, 'writer');
+    addNames(data['Actors'] as String?, 'actor');
+
+    return _MovieMatch(
+      tmdbId: null,
+      imdbId: imdbId,
+      overview: OmdbService.cleanText(data['Plot'] as String?),
+      posterPath: OmdbService.posterUrl(data['Poster'] as String?),
+      rating: OmdbService.parseRating(data['imdbRating'] as String?),
+      runtimeMinutes:
+          OmdbService.parseRuntimeMinutes(data['Runtime'] as String?),
+      genres: OmdbService.cleanText(data['Genre'] as String?),
+      contentRating: OmdbService.cleanText(data['Rated'] as String?),
+      director: OmdbService.cleanText(data['Director'] as String?),
+      writer: OmdbService.cleanText(data['Writer'] as String?),
+      castNames: OmdbService.cleanText(data['Actors'] as String?),
+      credits: credits,
+    );
+  }
+
   Future<_MovieMatch?> _matchMovieTmdb(
     TmdbService tmdb,
     String title,
@@ -700,8 +744,13 @@ class ScanController extends StateNotifier<ScanState> {
   ) async {
     final results = await tmdb.searchMovie(title, year: year);
     if (results.isEmpty) return null;
-    final best = results.first;
-    final details = await tmdb.getMovieDetails(best.id);
+    return _matchMovieTmdbById(tmdb, results.first.id);
+  }
+
+  /// Fetches a movie by a known TMDB id directly (no title search) -- the
+  /// TMDB counterpart to [_matchMovieOmdbById].
+  Future<_MovieMatch?> _matchMovieTmdbById(TmdbService tmdb, int tmdbId) async {
+    final details = await tmdb.getMovieDetails(tmdbId);
 
     final genreList = (details['genres'] as List<dynamic>?) ?? [];
     final genres = genreList.map((g) => g['name']).join(', ');
@@ -709,7 +758,7 @@ class ScanController extends StateNotifier<ScanState> {
         _extractTmdbCredits(details['credits'] as Map<String, dynamic>?);
 
     return _MovieMatch(
-      tmdbId: best.id,
+      tmdbId: tmdbId,
       imdbId: details['imdb_id'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
@@ -1032,11 +1081,57 @@ class ScanController extends StateNotifier<ScanState> {
     );
   }
 
+  /// Fetches a show by a known IMDb id directly (no title search) --
+  /// mirrors [_matchMovieOmdbById] for shows.
+  Future<_ShowMatch?> _matchShowOmdbById(
+    OmdbService omdb,
+    String imdbId,
+  ) async {
+    final data = await omdb.getByImdbId(imdbId);
+    if (data == null) return null;
+
+    final credits = <MovieCreditInput>[];
+    void addNames(String? raw, String role) {
+      final cleaned = OmdbService.cleanText(raw);
+      if (cleaned == null) return;
+      for (final name in cleaned.split(',')) {
+        final trimmed = name.trim();
+        if (trimmed.isNotEmpty) {
+          credits.add(MovieCreditInput(name: trimmed, role: role));
+        }
+      }
+    }
+
+    addNames(data['Writer'] as String?, 'creator');
+    addNames(data['Actors'] as String?, 'actor');
+
+    final totalSeasons = data['totalSeasons'];
+    final statusText = (data['Status'] as String?) ??
+        (totalSeasons != null ? '$totalSeasons seasons' : null);
+
+    return _ShowMatch(
+      tmdbId: null,
+      imdbId: imdbId,
+      overview: OmdbService.cleanText(data['Plot'] as String?),
+      posterPath: OmdbService.posterUrl(data['Poster'] as String?),
+      rating: OmdbService.parseRating(data['imdbRating'] as String?),
+      genres: OmdbService.cleanText(data['Genre'] as String?),
+      contentRating: OmdbService.cleanText(data['Rated'] as String?),
+      status: statusText,
+      credits: credits,
+    );
+  }
+
   Future<_ShowMatch?> _matchShowTmdb(TmdbService tmdb, String title) async {
     final results = await tmdb.searchTvShow(title);
     if (results.isEmpty) return null;
-    final best = results.first;
-    final details = await tmdb.getShowDetails(best.id);
+    return _matchShowTmdbById(tmdb, results.first.id);
+  }
+
+  /// Fetches a show by a known TMDB id directly (no title search) -- the
+  /// TMDB counterpart to [_matchShowOmdbById].
+  Future<_ShowMatch?> _matchShowTmdbById(TmdbService tmdb, int tmdbId) async {
+    final details = await tmdb.getShowDetails(tmdbId);
 
     final genreList = (details['genres'] as List<dynamic>?) ?? [];
     final genres = genreList.map((g) => g['name']).join(', ');
@@ -1077,7 +1172,7 @@ class ScanController extends StateNotifier<ScanState> {
     final externalIds = details['external_ids'] as Map<String, dynamic>?;
 
     return _ShowMatch(
-      tmdbId: best.id,
+      tmdbId: tmdbId,
       imdbId: externalIds?['imdb_id'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
@@ -1186,7 +1281,11 @@ class ScanController extends StateNotifier<ScanState> {
   }
 
   /// Re-runs matching for a single already-scanned movie (the "Update"
-  /// button on the movie detail screen), using its stored title/year.
+  /// button on the movie detail screen). If the movie already has a
+  /// tmdbId or imdbId -- from the original match, or a manual correction
+  /// in Edit -- this fetches that exact id and nothing else, so a refresh
+  /// can never drift to a different title. Only a movie with neither id
+  /// set falls back to a fresh title/year search.
   Future<bool> refreshMovie(int movieId) async {
     final movie = await db.getMovieById(movieId);
     if (movie == null) return false;
@@ -1201,24 +1300,44 @@ class ScanController extends StateNotifier<ScanState> {
     );
 
     _MovieMatch? match;
-    if (omdb != null) {
+    if (movie.tmdbId != null && tmdb != null) {
       try {
-        match = await _matchMovieOmdb(omdb, tmdb, movie.title, movie.year);
+        match = await _matchMovieTmdbById(tmdb, movie.tmdbId!);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'TMDB: $e',
+        );
+      }
+    } else if (movie.imdbId != null && omdb != null) {
+      try {
+        match = await _matchMovieOmdbById(omdb, movie.imdbId!);
       } catch (e) {
         state = state.copyWith(
           networkErrors: state.networkErrors + 1,
           lastError: 'OMDb: $e',
         );
       }
-    }
-    if (match == null && tmdb != null) {
-      try {
-        match = await _matchMovieTmdb(tmdb, movie.title, movie.year);
-      } catch (e) {
-        state = state.copyWith(
-          networkErrors: state.networkErrors + 1,
-          lastError: 'TMDB: $e',
-        );
+    } else {
+      if (omdb != null) {
+        try {
+          match = await _matchMovieOmdb(omdb, tmdb, movie.title, movie.year);
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'OMDb: $e',
+          );
+        }
+      }
+      if (match == null && tmdb != null) {
+        try {
+          match = await _matchMovieTmdb(tmdb, movie.title, movie.year);
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'TMDB: $e',
+          );
+        }
       }
     }
 
@@ -1233,8 +1352,8 @@ class ScanController extends StateNotifier<ScanState> {
         folderPath: movie.folderPath,
         year: Value(movie.year),
         trailerFilePath: Value(trailerPath),
-        tmdbId: Value(match.tmdbId),
-          imdbId: Value(match.imdbId),
+        tmdbId: Value(match.tmdbId ?? movie.tmdbId),
+        imdbId: Value(match.imdbId ?? movie.imdbId),
         overview: Value(match.overview),
         posterPath: Value(match.posterPath),
         backdropPath: Value(match.backdropPath),
@@ -1272,7 +1391,7 @@ class ScanController extends StateNotifier<ScanState> {
 
   /// Re-runs matching for a single already-scanned show, including
   /// re-enriching its episodes (the "Update" button on the show detail
-  /// screen).
+  /// screen). Same "trust a pinned id" contract as [refreshMovie].
   Future<bool> refreshShow(int showId) async {
     final show = await db.getShowById(showId);
     if (show == null) return false;
@@ -1287,24 +1406,44 @@ class ScanController extends StateNotifier<ScanState> {
     );
 
     _ShowMatch? match;
-    if (omdb != null) {
+    if (show.tmdbId != null && tmdb != null) {
       try {
-        match = await _matchShowOmdb(omdb, tmdb, show.title);
+        match = await _matchShowTmdbById(tmdb, show.tmdbId!);
+      } catch (e) {
+        state = state.copyWith(
+          networkErrors: state.networkErrors + 1,
+          lastError: 'TMDB: $e',
+        );
+      }
+    } else if (show.imdbId != null && omdb != null) {
+      try {
+        match = await _matchShowOmdbById(omdb, show.imdbId!);
       } catch (e) {
         state = state.copyWith(
           networkErrors: state.networkErrors + 1,
           lastError: 'OMDb: $e',
         );
       }
-    }
-    if (match == null && tmdb != null) {
-      try {
-        match = await _matchShowTmdb(tmdb, show.title);
-      } catch (e) {
-        state = state.copyWith(
-          networkErrors: state.networkErrors + 1,
-          lastError: 'TMDB: $e',
-        );
+    } else {
+      if (omdb != null) {
+        try {
+          match = await _matchShowOmdb(omdb, tmdb, show.title);
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'OMDb: $e',
+          );
+        }
+      }
+      if (match == null && tmdb != null) {
+        try {
+          match = await _matchShowTmdb(tmdb, show.title);
+        } catch (e) {
+          state = state.copyWith(
+            networkErrors: state.networkErrors + 1,
+            lastError: 'TMDB: $e',
+          );
+        }
       }
     }
 
@@ -1313,8 +1452,8 @@ class ScanController extends StateNotifier<ScanState> {
       await db.upsertShow(ShowsCompanion.insert(
         title: show.title,
         folderPath: show.folderPath,
-        tmdbId: Value(match.tmdbId),
-          imdbId: Value(match.imdbId),
+        tmdbId: Value(match.tmdbId ?? show.tmdbId),
+        imdbId: Value(match.imdbId ?? show.imdbId),
         overview: Value(match.overview),
         posterPath: Value(match.posterPath),
         backdropPath: Value(match.backdropPath),
@@ -1336,8 +1475,8 @@ class ScanController extends StateNotifier<ScanState> {
         await _enrichEpisodes(
           showId,
           seasonNumbers,
-          tmdbId: match.tmdbId,
-          imdbId: match.imdbId,
+          tmdbId: match.tmdbId ?? show.tmdbId,
+          imdbId: match.imdbId ?? show.imdbId,
           tmdb: tmdb,
           omdb: omdb,
         );
