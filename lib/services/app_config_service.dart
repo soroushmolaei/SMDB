@@ -16,8 +16,11 @@ class AppConfig {
   final String? proxyHost;
   final int? proxyPort;
 
-  /// Folder that contains library.sqlite. Null means "use the default
-  /// location" (the user's Documents folder).
+  /// Where the active database lives. Either a specific file (has an
+  /// extension -- how it's stored by Open/Import/Change Location) or a
+  /// bare folder containing library.sqlite (older configs, before a
+  /// specific file could be chosen). Null means "use the default
+  /// location" (Documents/SMDB/library.sqlite).
   final String? databasePath;
 
   /// Storage keys for AppThemeColor/ThemeMode — kept as plain strings

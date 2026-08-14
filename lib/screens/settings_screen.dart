@@ -247,9 +247,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     setState(() => _movingDb = true);
     try {
       final oldPath = await resolveDbFilePath();
-      final newPath = p.join(newFolder, 'library.sqlite');
+      final newPath = p.join(newFolder, p.basename(oldPath));
       await _copyDbFiles(oldPath, newPath);
-      await AppConfigService.update(databasePath: newFolder);
+      await AppConfigService.update(databasePath: newPath);
       ref.invalidate(databaseProvider);
       ref.invalidate(databasePathProvider);
       if (mounted) {
@@ -265,6 +265,146 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('Failed to move database: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _movingDb = false);
+    }
+  }
+
+  /// Switches to using an existing database file directly, in place --
+  /// nothing is copied, so this is the way to keep several separate
+  /// libraries (e.g. one file for movies, one for shows) in the same
+  /// folder and freely swap between them.
+  Future<void> _openDatabaseFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Choose a database file',
+      type: FileType.custom,
+      allowedExtensions: ['sqlite', 'sqlite3', 'db'],
+    );
+    final newPath = result?.files.single.path;
+    if (newPath == null) return;
+    if (!mounted) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Switch database?'),
+        content: Text(
+          'The app will switch to using:\n\n$newPath\n\n'
+          'Nothing is copied — you can switch to any other file the same '
+          'way later.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Switch'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    setState(() => _movingDb = true);
+    try {
+      await AppConfigService.update(databasePath: newPath);
+      ref.invalidate(databaseProvider);
+      ref.invalidate(databasePathProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Switched to ${p.basename(newPath)}')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to switch database: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _movingDb = false);
+    }
+  }
+
+  /// Copies an external database file into the current database's folder
+  /// and switches to that copy. Unlike [_openDatabaseFile], this never
+  /// touches the currently active file -- it only ever writes to a brand
+  /// new path, so there's no risk of overwriting a file the app still
+  /// has open.
+  Future<void> _importDatabase() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Import database from...',
+      type: FileType.custom,
+      allowedExtensions: ['sqlite', 'sqlite3', 'db'],
+    );
+    final sourcePath = result?.files.single.path;
+    if (sourcePath == null) return;
+    if (!mounted) return;
+
+    setState(() => _movingDb = true);
+    try {
+      final currentPath = await resolveDbFilePath();
+      final targetDir = p.dirname(currentPath);
+      var targetPath = p.join(targetDir, p.basename(sourcePath));
+      // Don't silently overwrite a same-named file already sitting there.
+      if (targetPath == currentPath || await File(targetPath).exists()) {
+        final stamp = DateTime.now().millisecondsSinceEpoch;
+        final ext = p.extension(sourcePath);
+        final base = p.basenameWithoutExtension(sourcePath);
+        targetPath = p.join(targetDir, '$base-imported-$stamp$ext');
+      }
+      await _copyDbFiles(sourcePath, targetPath);
+      await AppConfigService.update(databasePath: targetPath);
+      ref.invalidate(databaseProvider);
+      ref.invalidate(databasePathProvider);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content:
+                Text('Imported and switched to ${p.basename(targetPath)}'),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Import failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _movingDb = false);
+    }
+  }
+
+  /// Saves a copy of the current database file wherever the user picks --
+  /// a manual backup. Doesn't change which file the app is using.
+  Future<void> _exportDatabase() async {
+    final currentPath = await resolveDbFilePath();
+    final savePath = await FilePicker.platform.saveFile(
+      dialogTitle: 'Export database to...',
+      fileName: p.basename(currentPath),
+      type: FileType.custom,
+      allowedExtensions: ['sqlite'],
+    );
+    if (savePath == null) return;
+    if (!mounted) return;
+
+    setState(() => _movingDb = true);
+    try {
+      await _copyDbFiles(currentPath, savePath);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Exported to $savePath')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Export failed: $e')),
         );
       }
     } finally {
@@ -681,8 +821,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Where your movie/show library file (library.sqlite) is '
-                'stored. Defaults to your Documents folder.',
+                'Which database file the app is using. Defaults to '
+                'library.sqlite in your Documents folder, but you can point '
+                'it at any file -- handy for keeping separate libraries '
+                '(e.g. one file for movies, one for shows) and switching '
+                'between them.',
                 style: TextStyle(color: Colors.white54, fontSize: 12),
               ),
               const SizedBox(height: 8),
@@ -702,26 +845,55 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 loading: () => const LinearProgressIndicator(),
                 error: (e, st) => Text('Error: $e'),
               ),
-              const SizedBox(height: 12),
-              Row(
+              const SizedBox(height: 8),
+              if (_movingDb) ...[
+                const LinearProgressIndicator(),
+                const SizedBox(height: 8),
+              ],
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: _movingDb ? null : _openDatabaseFile,
+                    icon: const Icon(Icons.file_open, size: 16),
+                    label: const Text('Open File...'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _movingDb ? null : _importDatabase,
+                    icon: const Icon(Icons.file_download, size: 16),
+                    label: const Text('Import...'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _movingDb ? null : _exportDatabase,
+                    icon: const Icon(Icons.file_upload, size: 16),
+                    label: const Text('Export...'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
                 children: [
                   OutlinedButton.icon(
                     onPressed: _movingDb ? null : _changeDatabaseLocation,
-                    icon: _movingDb
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.folder_open, size: 16),
+                    icon: const Icon(Icons.drive_file_move_outline, size: 16),
                     label: const Text('Change Location...'),
                   ),
-                  const SizedBox(width: 8),
                   TextButton(
                     onPressed: _movingDb ? null : _resetDatabaseLocation,
                     child: const Text('Use Default'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                'Open switches to an existing file in place (nothing is '
+                'copied). Import copies an external file into your current '
+                'folder and switches to it. Export saves a backup copy '
+                'wherever you choose.',
+                style: TextStyle(color: Colors.white38, fontSize: 11),
               ),
     ];
   }

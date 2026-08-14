@@ -1010,13 +1010,27 @@ LazyDatabase _openConnection() {
   });
 }
 
-/// Resolves the full path to library.sqlite: a user-chosen folder from
-/// [AppConfigService] if one has been set (Settings → Database → Change
-/// Location), otherwise the default Documents/SMDB folder.
+/// Resolves the full path to the active database file: a user-chosen
+/// path from [AppConfigService] if one has been set (Settings →
+/// Database), otherwise the default Documents/SMDB/library.sqlite.
+///
+/// [AppConfig.databasePath] can point at a specific file (has an
+/// extension, e.g. "D:/SMDB/shows.sqlite") -- how every current save
+/// path stores it, since Open/Import/Change Location all resolve to one
+/// exact file -- or at a bare folder (no extension), which is treated as
+/// "the folder that holds library.sqlite", for compatibility with
+/// configs saved before a specific file could be chosen.
 Future<String> resolveDbFilePath() async {
   final config = await AppConfigService.load();
   final customPath = config.databasePath;
   if (customPath != null && customPath.isNotEmpty) {
+    if (p.extension(customPath).isNotEmpty) {
+      final dir = Directory(p.dirname(customPath));
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      return customPath;
+    }
     final dir = Directory(customPath);
     if (!await dir.exists()) {
       await dir.create(recursive: true);
