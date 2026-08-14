@@ -73,6 +73,7 @@ class Shows extends Table {
   TextColumn get status => text().nullable()();
   TextColumn get folderPath => text()();
   DateTimeColumn get dateAdded => dateTime().withDefault(currentDateAndTime)();
+  RealColumn get personalRating => real().nullable()();
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   BoolColumn get awardsChecked =>
       boolean().withDefault(const Constant(false))();
@@ -243,7 +244,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 12;
+  int get schemaVersion => 13;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -330,6 +331,9 @@ class AppDatabase extends _$AppDatabase {
               );
             }
           }
+          if (from < 13) {
+            await m.addColumn(shows, shows.personalRating);
+          }
         },
       );
 
@@ -401,6 +405,10 @@ class AppDatabase extends _$AppDatabase {
   Future<void> setShowFavorite(int id, bool favorite) =>
       (update(shows)..where((s) => s.id.equals(id)))
           .write(ShowsCompanion(isFavorite: Value(favorite)));
+
+  Future<void> setPersonalRatingForShow(int id, double? rating) =>
+      (update(shows)..where((s) => s.id.equals(id)))
+          .write(ShowsCompanion(personalRating: Value(rating)));
 
   /// Applies an arbitrary set of field edits to an existing movie (used by
   /// the manual edit screen). Only fields set on [data] are changed.
@@ -576,6 +584,24 @@ class AppDatabase extends _$AppDatabase {
       ),
     );
     if (watched) await _seedFirstWatchIfNone('episode', id);
+  }
+
+  /// Marks every episode of one season watched/unwatched at once (the
+  /// per-season "watched" button, next to the per-episode ones). Goes
+  /// through setEpisodeWatched for each episode so watch history is
+  /// still seeded correctly per episode, same as toggling them by hand.
+  Future<void> setSeasonWatched(
+    int showId,
+    int seasonNumber,
+    bool watched,
+  ) async {
+    final seasonEpisodes = await (select(episodes)
+          ..where((e) =>
+              e.showId.equals(showId) & e.seasonNumber.equals(seasonNumber)))
+        .get();
+    for (final episode in seasonEpisodes) {
+      await setEpisodeWatched(episode.id, watched);
+    }
   }
 
   /// Fills in rich per-episode metadata found after the initial file scan

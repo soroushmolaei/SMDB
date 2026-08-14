@@ -11,6 +11,7 @@ import '../widgets/awards_section.dart';
 import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
+import '../widgets/personal_rating_stars.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
 import '../widgets/watch_history_section.dart';
@@ -90,6 +91,10 @@ class ShowDetailScreen extends ConsumerWidget {
                       onToggleFavorite: () => ref
                           .read(databaseProvider)
                           .setShowFavorite(show.id, !show.isFavorite),
+                      personalRating: show.personalRating,
+                      onSetPersonalRating: (value) => ref
+                          .read(databaseProvider)
+                          .setPersonalRatingForShow(show.id, value),
                       onAddToGroup: () => showAddToGroupDialog(
                         context,
                         ref,
@@ -251,10 +256,36 @@ class ShowDetailScreen extends ConsumerWidget {
                                   .toList()
                                 ..sort((a, b) => a.episodeNumber
                                     .compareTo(b.episodeNumber));
+                              final allWatched = seasonEpisodes.isNotEmpty &&
+                                  seasonEpisodes.every((e) => e.watched);
                               return ExpansionTile(
-                                title: Text(
-                                  'Season $season',
-                                  style: const TextStyle(color: Colors.white),
+                                title: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        'Season $season',
+                                        style: const TextStyle(
+                                            color: Colors.white),
+                                      ),
+                                    ),
+                                    IconButton(
+                                      icon: Icon(
+                                        allWatched
+                                            ? Icons.check_circle
+                                            : Icons.check_circle_outline,
+                                        color: allWatched
+                                            ? Colors.greenAccent.shade400
+                                            : Colors.white54,
+                                      ),
+                                      tooltip: allWatched
+                                          ? 'Mark season unwatched'
+                                          : 'Mark season watched',
+                                      onPressed: () => ref
+                                          .read(databaseProvider)
+                                          .setSeasonWatched(
+                                              show.id, season, !allWatched),
+                                    ),
+                                  ],
                                 ),
                                 subtitle: Text(
                                   '${seasonEpisodes.length} episodes',
@@ -376,6 +407,8 @@ class _ShowHero extends StatelessWidget {
   final bool isFavorite;
   final VoidCallback onToggleFavorite;
   final VoidCallback onAddToGroup;
+  final double? personalRating;
+  final ValueChanged<double?> onSetPersonalRating;
 
   const _ShowHero({
     required this.title,
@@ -389,6 +422,8 @@ class _ShowHero extends StatelessWidget {
     required this.isFavorite,
     required this.onToggleFavorite,
     required this.onAddToGroup,
+    required this.personalRating,
+    required this.onSetPersonalRating,
   });
 
   @override
@@ -520,6 +555,27 @@ class _ShowHero extends StatelessWidget {
                             ],
                           ),
                         ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Row(
+                          children: [
+                            PersonalRatingStars(
+                              value: personalRating,
+                              onChanged: onSetPersonalRating,
+                            ),
+                            const SizedBox(width: 8),
+                            const Text(
+                              'Your\nRating',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 11,
+                                height: 1.1,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       Padding(
                         padding: const EdgeInsets.only(top: 10),
                         child: Row(
