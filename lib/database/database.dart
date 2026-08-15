@@ -53,6 +53,7 @@ class Movies extends Table {
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   BoolColumn get awardsChecked =>
       boolean().withDefault(const Constant(false))();
+  TextColumn get originalLanguage => text().nullable()();
 }
 
 @DataClassName('Show')
@@ -77,6 +78,7 @@ class Shows extends Table {
   BoolColumn get isFavorite => boolean().withDefault(const Constant(false))();
   BoolColumn get awardsChecked =>
       boolean().withDefault(const Constant(false))();
+  TextColumn get originalLanguage => text().nullable()();
 }
 
 @DataClassName('Episode')
@@ -94,6 +96,7 @@ class Episodes extends Table {
   TextColumn get filePath => text()();
   BoolColumn get watched => boolean().withDefault(const Constant(false))();
   DateTimeColumn get watchedDate => dateTime().nullable()();
+  IntColumn get runtimeMinutes => integer().nullable()();
 }
 
 @DataClassName('Person')
@@ -244,7 +247,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 13;
+  int get schemaVersion => 14;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -333,6 +336,11 @@ class AppDatabase extends _$AppDatabase {
           }
           if (from < 13) {
             await m.addColumn(shows, shows.personalRating);
+          }
+          if (from < 14) {
+            await m.addColumn(movies, movies.originalLanguage);
+            await m.addColumn(shows, shows.originalLanguage);
+            await m.addColumn(episodes, episodes.runtimeMinutes);
           }
         },
       );
@@ -617,6 +625,7 @@ class AppDatabase extends _$AppDatabase {
     String? stillPath,
     double? rating,
     String? guestStars,
+    int? runtimeMinutes,
   }) async {
     await (update(episodes)
           ..where((e) =>
@@ -630,6 +639,9 @@ class AppDatabase extends _$AppDatabase {
       stillPath: Value(stillPath),
       rating: Value(rating),
       guestStars: Value(guestStars),
+      runtimeMinutes: runtimeMinutes != null
+          ? Value(runtimeMinutes)
+          : const Value.absent(),
     ));
   }
 

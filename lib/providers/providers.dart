@@ -12,6 +12,7 @@ import '../services/thumbnail_service.dart';
 import '../services/tmdb_service.dart';
 import '../services/wikidata_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/language_names.dart';
 
 // ---------------------------------------------------------------------------
 // Database
@@ -292,6 +293,7 @@ class _MovieMatch {
   final String? director;
   final String? writer;
   final String? castNames;
+  final String? originalLanguage;
   final List<MovieCreditInput> credits;
 
   _MovieMatch({
@@ -307,6 +309,7 @@ class _MovieMatch {
     this.director,
     this.writer,
     this.castNames,
+    this.originalLanguage,
     this.credits = const [],
   });
 }
@@ -321,6 +324,7 @@ class _ShowMatch {
   final String? genres;
   final String? contentRating;
   final String? status;
+  final String? originalLanguage;
   final List<MovieCreditInput> credits;
 
   _ShowMatch({
@@ -333,6 +337,7 @@ class _ShowMatch {
     this.genres,
     this.contentRating,
     this.status,
+    this.originalLanguage,
     this.credits = const [],
   });
 }
@@ -348,6 +353,18 @@ class _TmdbCreditsExtract {
     this.castNames,
     required this.credits,
   });
+}
+
+/// OMDb's `Language` field is a comma-separated list (e.g. "English,
+/// Spanish"), already human-readable, listed primary-language-first.
+/// Statistics groups by a single language per title, so just the first
+/// one is kept -- mirrors how [languageNameForCode] reduces TMDB's single
+/// `original_language` code to one display name.
+String? _primaryLanguageFromOmdb(String? raw) {
+  final cleaned = OmdbService.cleanText(raw);
+  if (cleaned == null) return null;
+  final first = cleaned.split(',').first.trim();
+  return first.isEmpty ? null : first;
 }
 
 _TmdbCreditsExtract _extractTmdbCredits(Map<String, dynamic>? creditsMap) {
@@ -586,6 +603,7 @@ class ScanController extends StateNotifier<ScanState> {
             director: Value(match.director),
             writer: Value(match.writer),
             castNames: Value(match.castNames),
+            originalLanguage: Value(match.originalLanguage),
           ),
         );
         try {
@@ -689,6 +707,7 @@ class ScanController extends StateNotifier<ScanState> {
       director: OmdbService.cleanText(data['Director'] as String?),
       writer: OmdbService.cleanText(data['Writer'] as String?),
       castNames: OmdbService.cleanText(data['Actors'] as String?),
+      originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
       credits: credits,
     );
   }
@@ -733,6 +752,7 @@ class ScanController extends StateNotifier<ScanState> {
       director: OmdbService.cleanText(data['Director'] as String?),
       writer: OmdbService.cleanText(data['Writer'] as String?),
       castNames: OmdbService.cleanText(data['Actors'] as String?),
+      originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
       credits: credits,
     );
   }
@@ -773,6 +793,7 @@ class ScanController extends StateNotifier<ScanState> {
       director: extracted.director,
       writer: extracted.writer,
       castNames: extracted.castNames,
+      originalLanguage: languageNameForCode(details['original_language'] as String?),
       credits: extracted.credits,
     );
   }
@@ -933,6 +954,7 @@ class ScanController extends StateNotifier<ScanState> {
             genres: Value(match.genres),
             contentRating: Value(match.contentRating),
             status: Value(match.status),
+            originalLanguage: Value(match.originalLanguage),
           ));
           try {
             await db.setShowCredits(showId, match.credits);
@@ -1077,6 +1099,7 @@ class ScanController extends StateNotifier<ScanState> {
       genres: OmdbService.cleanText(data['Genre'] as String?),
       contentRating: contentRating,
       status: statusText,
+      originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
       credits: credits,
     );
   }
@@ -1118,6 +1141,7 @@ class ScanController extends StateNotifier<ScanState> {
       genres: OmdbService.cleanText(data['Genre'] as String?),
       contentRating: OmdbService.cleanText(data['Rated'] as String?),
       status: statusText,
+      originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
       credits: credits,
     );
   }
@@ -1184,6 +1208,7 @@ class ScanController extends StateNotifier<ScanState> {
       genres: genres,
       contentRating: TmdbService.extractShowCertification(details),
       status: details['status'] as String?,
+      originalLanguage: languageNameForCode(details['original_language'] as String?),
       credits: credits,
     );
   }
@@ -1224,6 +1249,7 @@ class ScanController extends StateNotifier<ScanState> {
               rating: (ep['vote_average'] as num?)?.toDouble(),
               guestStars:
                   guestStars.take(10).map((g) => g['name']).join(', '),
+              runtimeMinutes: ep['runtime'] as int?,
             );
 
             if (guestStars.isNotEmpty) {
@@ -1364,6 +1390,7 @@ class ScanController extends StateNotifier<ScanState> {
         director: Value(match.director),
         writer: Value(match.writer),
         castNames: Value(match.castNames),
+        originalLanguage: Value(match.originalLanguage),
       ));
       try {
         await db.setMovieCredits(movieId, match.credits);
@@ -1461,6 +1488,7 @@ class ScanController extends StateNotifier<ScanState> {
         genres: Value(match.genres),
         contentRating: Value(match.contentRating),
         status: Value(match.status),
+        originalLanguage: Value(match.originalLanguage),
       ));
       try {
         await db.setShowCredits(showId, match.credits);
