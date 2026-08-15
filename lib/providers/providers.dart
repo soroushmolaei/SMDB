@@ -13,6 +13,7 @@ import '../services/tmdb_service.dart';
 import '../services/wikidata_service.dart';
 import '../theme/app_theme.dart';
 import '../utils/language_names.dart';
+import '../utils/metadata_refresh_mode.dart';
 
 // ---------------------------------------------------------------------------
 // Database
@@ -1312,11 +1313,12 @@ class ScanController extends StateNotifier<ScanState> {
   /// in Edit -- this fetches that exact id and nothing else, so a refresh
   /// can never drift to a different title. Only a movie with neither id
   /// set falls back to a fresh title/year search.
-  Future<bool> refreshMovie(int movieId) async {
+  Future<bool> refreshMovie(
+    int movieId, {
+    MetadataRefreshMode mode = MetadataRefreshMode.full,
+  }) async {
     final movie = await db.getMovieById(movieId);
     if (movie == null) return false;
-    final tmdb = ref.read(tmdbServiceProvider);
-    final omdb = ref.read(omdbServiceProvider);
 
     state = ScanState(
       status: ScanStatus.matching,
@@ -1324,6 +1326,26 @@ class ScanController extends StateNotifier<ScanState> {
       processed: 0,
       currentItem: movie.title,
     );
+
+    final success = await _refreshMovieCore(movie, mode);
+
+    state = state.copyWith(
+      status: ScanStatus.done,
+      processed: 1,
+      matched: success ? 1 : 0,
+    );
+    return success;
+  }
+
+  /// The actual match-and-save logic shared by [refreshMovie] (single
+  /// item, from the detail screen's Update button) and [refreshMultiple]
+  /// (bulk, from multi-select) -- neither touches [state] here, so the
+  /// caller's own progress reporting (single-item vs. batch) is never
+  /// clobbered mid-loop.
+  Future<bool> _refreshMovieCore(Movie movie, MetadataRefreshMode mode) async {
+    final movieId = movie.id;
+    final tmdb = ref.read(tmdbServiceProvider);
+    final omdb = ref.read(omdbServiceProvider);
 
     _MovieMatch? match;
     if (movie.tmdbId != null && tmdb != null) {
@@ -1372,6 +1394,8 @@ class ScanController extends StateNotifier<ScanState> {
         await LibraryScanner.findTrailerInFolder(
             movie.folderPath, movie.filePath);
     if (match != null) {
+      final includeImages = mode != MetadataRefreshMode.skipImages;
+      final includeOtherFields = mode != MetadataRefreshMode.imagesOnly;
       await db.upsertMovie(MoviesCompanion.insert(
         title: movie.title,
         filePath: movie.filePath,
@@ -1380,24 +1404,43 @@ class ScanController extends StateNotifier<ScanState> {
         trailerFilePath: Value(trailerPath),
         tmdbId: Value(match.tmdbId ?? movie.tmdbId),
         imdbId: Value(match.imdbId ?? movie.imdbId),
-        overview: Value(match.overview),
-        posterPath: Value(match.posterPath),
-        backdropPath: Value(match.backdropPath),
-        rating: Value(match.rating),
-        runtimeMinutes: Value(match.runtimeMinutes),
-        genres: Value(match.genres),
-        contentRating: Value(match.contentRating),
-        director: Value(match.director),
-        writer: Value(match.writer),
-        castNames: Value(match.castNames),
-        originalLanguage: Value(match.originalLanguage),
+        overview:
+            includeOtherFields ? Value(match.overview) : const Value.absent(),
+        posterPath:
+            includeImages ? Value(match.posterPath) : const Value.absent(),
+        backdropPath:
+            includeImages ? Value(match.backdropPath) : const Value.absent(),
+        rating:
+            includeOtherFields ? Value(match.rating) : const Value.absent(),
+        runtimeMinutes: includeOtherFields
+            ? Value(match.runtimeMinutes)
+            : const Value.absent(),
+        genres:
+            includeOtherFields ? Value(match.genres) : const Value.absent(),
+        contentRating: includeOtherFields
+            ? Value(match.contentRating)
+            : const Value.absent(),
+        director:
+            includeOtherFields ? Value(match.director) : const Value.absent(),
+        writer:
+            includeOtherFields ? Value(match.writer) : const Value.absent(),
+        castNames: includeOtherFields
+            ? Value(match.castNames)
+            : const Value.absent(),
+        originalLanguage: includeOtherFields
+            ? Value(match.originalLanguage)
+            : const Value.absent(),
       ));
-      try {
-        await db.setMovieCredits(movieId, match.credits);
-      } catch (_) {
-        // Non-fatal.
+      if (includeOtherFields) {
+        try {
+          await db.setMovieCredits(movieId, match.credits);
+        } catch (_) {
+          // Non-fatal.
+        }
       }
-      unawaited(_saveMovieThumbnails(movieId, match));
+      if (includeImages) {
+        unawaited(_saveMovieThumbnails(movieId, match));
+      }
       success = true;
     } else if (trailerPath != movie.trailerFilePath) {
       // Even if no metadata match was found, still save a newly detected
@@ -1408,6 +1451,28 @@ class ScanController extends StateNotifier<ScanState> {
       );
     }
 
+    return success;
+  }
+
+  /// Re-runs matching for a single already-scanned show, including
+  /// re-enriching its episodes (the "Update" button on the show detail
+  /// screen). Same "trust a pinned id" contract as [refreshMovie].
+  Future<bool> refreshShow(
+    int showId, {
+    MetadataRefreshMode mode = MetadataRefreshMode.full,
+  }) async {
+    final show = await db.getShowById(showId);
+    if (show == null) return false;
+
+    state = ScanState(
+      status: ScanStatus.matching,
+      total: 1,
+      processed: 0,
+      currentItem: show.title,
+    );
+
+    final success = await _refreshShowCore(show, mode);
+
     state = state.copyWith(
       status: ScanStatus.done,
       processed: 1,
@@ -1416,21 +1481,13 @@ class ScanController extends StateNotifier<ScanState> {
     return success;
   }
 
-  /// Re-runs matching for a single already-scanned show, including
-  /// re-enriching its episodes (the "Update" button on the show detail
-  /// screen). Same "trust a pinned id" contract as [refreshMovie].
-  Future<bool> refreshShow(int showId) async {
-    final show = await db.getShowById(showId);
-    if (show == null) return false;
+  /// The actual match-and-save logic shared by [refreshShow] and
+  /// [refreshMultiple]; see [_refreshMovieCore] for why [state] is left
+  /// alone here.
+  Future<bool> _refreshShowCore(Show show, MetadataRefreshMode mode) async {
+    final showId = show.id;
     final tmdb = ref.read(tmdbServiceProvider);
     final omdb = ref.read(omdbServiceProvider);
-
-    state = ScanState(
-      status: ScanStatus.matching,
-      total: 1,
-      processed: 0,
-      currentItem: show.title,
-    );
 
     _ShowMatch? match;
     if (show.tmdbId != null && tmdb != null) {
@@ -1476,50 +1533,171 @@ class ScanController extends StateNotifier<ScanState> {
 
     var success = false;
     if (match != null) {
+      final includeImages = mode != MetadataRefreshMode.skipImages;
+      final includeOtherFields = mode != MetadataRefreshMode.imagesOnly;
       await db.upsertShow(ShowsCompanion.insert(
         title: show.title,
         folderPath: show.folderPath,
         tmdbId: Value(match.tmdbId ?? show.tmdbId),
         imdbId: Value(match.imdbId ?? show.imdbId),
-        overview: Value(match.overview),
-        posterPath: Value(match.posterPath),
-        backdropPath: Value(match.backdropPath),
-        rating: Value(match.rating),
-        genres: Value(match.genres),
-        contentRating: Value(match.contentRating),
-        status: Value(match.status),
-        originalLanguage: Value(match.originalLanguage),
+        overview:
+            includeOtherFields ? Value(match.overview) : const Value.absent(),
+        posterPath:
+            includeImages ? Value(match.posterPath) : const Value.absent(),
+        backdropPath:
+            includeImages ? Value(match.backdropPath) : const Value.absent(),
+        rating:
+            includeOtherFields ? Value(match.rating) : const Value.absent(),
+        genres:
+            includeOtherFields ? Value(match.genres) : const Value.absent(),
+        contentRating: includeOtherFields
+            ? Value(match.contentRating)
+            : const Value.absent(),
+        status:
+            includeOtherFields ? Value(match.status) : const Value.absent(),
+        originalLanguage: includeOtherFields
+            ? Value(match.originalLanguage)
+            : const Value.absent(),
       ));
-      try {
-        await db.setShowCredits(showId, match.credits);
-      } catch (_) {
-        // Non-fatal.
+      if (includeOtherFields) {
+        try {
+          await db.setShowCredits(showId, match.credits);
+        } catch (_) {
+          // Non-fatal.
+        }
       }
-      unawaited(_saveShowThumbnails(showId, match));
+      if (includeImages) {
+        unawaited(_saveShowThumbnails(showId, match));
+      }
 
-      try {
-        final episodes = await db.getEpisodesForShowOnce(showId);
-        final seasonNumbers = episodes.map((e) => e.seasonNumber).toSet();
-        await _enrichEpisodes(
-          showId,
-          seasonNumbers,
-          tmdbId: match.tmdbId ?? show.tmdbId,
-          imdbId: match.imdbId ?? show.imdbId,
-          tmdb: tmdb,
-          omdb: omdb,
-        );
-      } catch (_) {
-        // Non-fatal.
+      if (includeOtherFields) {
+        try {
+          final episodes = await db.getEpisodesForShowOnce(showId);
+          final seasonNumbers = episodes.map((e) => e.seasonNumber).toSet();
+          await _enrichEpisodes(
+            showId,
+            seasonNumbers,
+            tmdbId: match.tmdbId ?? show.tmdbId,
+            imdbId: match.imdbId ?? show.imdbId,
+            tmdb: tmdb,
+            omdb: omdb,
+          );
+        } catch (_) {
+          // Non-fatal.
+        }
       }
       success = true;
     }
 
-    state = state.copyWith(
-      status: ScanStatus.done,
-      processed: 1,
-      matched: success ? 1 : 0,
-    );
     return success;
+  }
+
+  /// Bulk "Refresh Metadata" for movies/shows selected via multi-select
+  /// on any list page. Reuses the same [ScanState] progress reporting as
+  /// folder scans, so the existing progress bar in the app shell just
+  /// works for this too.
+  Future<void> refreshMultiple(
+    List<({String kind, int id})> targets,
+    MetadataRefreshMode mode,
+  ) async {
+    state = ScanState(
+      status: ScanStatus.matching,
+      total: targets.length,
+      processed: 0,
+    );
+    var matched = 0;
+    for (var i = 0; i < targets.length; i++) {
+      final target = targets[i];
+      bool ok;
+      if (target.kind == 'movie') {
+        final movie = await db.getMovieById(target.id);
+        state = state.copyWith(currentItem: movie?.title);
+        ok = movie == null ? false : await _refreshMovieCore(movie, mode);
+      } else {
+        final show = await db.getShowById(target.id);
+        state = state.copyWith(currentItem: show?.title);
+        ok = show == null ? false : await _refreshShowCore(show, mode);
+      }
+      if (ok) matched++;
+      state = state.copyWith(processed: i + 1, matched: matched);
+    }
+    state = state.copyWith(status: ScanStatus.done);
+  }
+
+  /// Re-fetches a person's bio/photo from TMDB -- unlike the lazy
+  /// first-fetch-only lookup on the person detail screen, this always
+  /// re-fetches, so it can also be used to pull in newly-added details.
+  /// Prefers the pinned [Person.tmdbPersonId] when present, otherwise
+  /// searches by name.
+  Future<bool> refreshPerson(
+    int personId, {
+    MetadataRefreshMode mode = MetadataRefreshMode.full,
+  }) async {
+    final person = await db.getPersonById(personId);
+    if (person == null) return false;
+    final tmdb = ref.read(tmdbServiceProvider);
+    if (tmdb == null) return false;
+
+    try {
+      var tmdbPersonId = person.tmdbPersonId;
+      if (tmdbPersonId == null) {
+        final results = await tmdb.searchPerson(person.name);
+        if (results.isEmpty) return false;
+        tmdbPersonId = results.first['id'] as int?;
+      }
+      if (tmdbPersonId == null) return false;
+
+      final details = await tmdb.getPersonDetails(tmdbPersonId);
+      final includeImages = mode != MetadataRefreshMode.skipImages;
+      final includeOtherFields = mode != MetadataRefreshMode.imagesOnly;
+      final bio = details['biography'] as String?;
+
+      await db.updatePersonBio(
+        personId,
+        tmdbPersonId: tmdbPersonId,
+        photoPath: includeImages
+            ? TmdbService.imageUrl(
+                details['profile_path'] as String?,
+                size: 'w300',
+              )
+            : null,
+        biography: includeOtherFields && bio != null && bio.trim().isNotEmpty
+            ? bio
+            : null,
+        birthday: includeOtherFields ? details['birthday'] as String? : null,
+        placeOfBirth:
+            includeOtherFields ? details['place_of_birth'] as String? : null,
+      );
+      return true;
+    } catch (e) {
+      state = state.copyWith(
+        networkErrors: state.networkErrors + 1,
+        lastError: 'TMDB: $e',
+      );
+      return false;
+    }
+  }
+
+  /// Bulk "Refresh Metadata" for people selected via multi-select on the
+  /// People tab.
+  Future<void> refreshMultiplePeople(
+    List<int> personIds,
+    MetadataRefreshMode mode,
+  ) async {
+    state = ScanState(
+      status: ScanStatus.matching,
+      total: personIds.length,
+      processed: 0,
+    );
+    var matched = 0;
+    for (var i = 0; i < personIds.length; i++) {
+      final person = await db.getPersonById(personIds[i]);
+      state = state.copyWith(currentItem: person?.name);
+      final ok = await refreshPerson(personIds[i], mode: mode);
+      if (ok) matched++;
+      state = state.copyWith(processed: i + 1, matched: matched);
+    }
+    state = state.copyWith(status: ScanStatus.done);
   }
 }
 

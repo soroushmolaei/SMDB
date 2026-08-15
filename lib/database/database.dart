@@ -433,6 +433,9 @@ class AppDatabase extends _$AppDatabase {
 
   Stream<List<Person>> watchAllPeople() => select(people).watch();
 
+  Future<Person?> getPersonById(int id) =>
+      (select(people)..where((p) => p.id.equals(id))).getSingleOrNull();
+
   Stream<List<MovieCredit>> watchAllCredits() => select(movieCredits).watch();
 
   Future<List<MovieCredit>> getCreditsForMovie(int movieId) =>
