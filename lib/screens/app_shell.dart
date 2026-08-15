@@ -14,6 +14,7 @@ import 'mpa_list_screen.dart';
 import 'people_tab.dart';
 import 'settings_screen.dart';
 import 'show_detail_screen.dart';
+import 'statistics_screen.dart';
 
 enum _Section {
   movies,
@@ -25,6 +26,7 @@ enum _Section {
   favorites,
   notYetWatched,
   watched,
+  statistics,
 }
 
 enum _ContentMode { moviesOnly, showsOnly, combined }
@@ -68,6 +70,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return 'Not yet Watched';
       case _Section.watched:
         return 'Watched';
+      case _Section.statistics:
+        return 'Statistics';
     }
   }
 
@@ -390,6 +394,8 @@ class _AppShellState extends ConsumerState<AppShell> {
           emptyTitle: 'Nothing watched yet',
           emptySubtitle: '',
         );
+      case _Section.statistics:
+        return const StatisticsScreen();
     }
   }
 }
@@ -508,6 +514,12 @@ class _Sidebar extends StatelessWidget {
                   label: 'Watched',
                   selected: selected == _Section.watched,
                   onTap: () => onSelect(_Section.watched),
+                ),
+                _NavItem(
+                  icon: Icons.bar_chart_outlined,
+                  label: 'Statistics',
+                  selected: selected == _Section.statistics,
+                  onTap: () => onSelect(_Section.statistics),
                 ),
                 const SizedBox(height: 12),
                 Padding(
