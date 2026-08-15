@@ -12,6 +12,7 @@ import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/personal_rating_stars.dart';
+import '../widgets/refresh_metadata_button.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
 import '../widgets/watch_history_section.dart';
@@ -307,34 +308,21 @@ class ShowDetailScreen extends ConsumerWidget {
               ),
               DetailTopBar(
                 actions: [
-                  HeroIconButton(
-                    icon: refreshing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(Colors.white),
-                            ),
-                          )
-                        : const Icon(Icons.refresh),
-                    tooltip: 'Update metadata',
-                    onPressed: refreshing
-                        ? null
-                        : () async {
-                            final ok = await ref
-                                .read(scanControllerProvider.notifier)
-                                .refreshShow(show.id);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content:
-                                      Text(ok ? 'Updated' : 'No match found'),
-                                ),
-                              );
-                            }
-                          },
+                  RefreshMetadataButton(
+                    busy: refreshing,
+                    onSelected: (mode) async {
+                      final ok = await ref
+                          .read(scanControllerProvider.notifier)
+                          .refreshShow(show.id, mode: mode);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content:
+                                Text(ok ? 'Updated' : 'No match found'),
+                          ),
+                        );
+                      }
+                    },
                   ),
                   HeroIconButton(
                     icon: const Icon(Icons.edit_outlined),

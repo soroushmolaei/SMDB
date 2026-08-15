@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
+import '../utils/metadata_refresh_mode.dart';
 import '../widgets/custom_title_bar.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
@@ -282,6 +283,7 @@ class _AppShellState extends ConsumerState<AppShell> {
     switch (_section) {
       case _Section.movies:
         return _LibrarySection(
+          key: const ValueKey(_Section.movies),
           mode: _ContentMode.moviesOnly,
           combinedFilter: _CombinedFilter.none,
           query: _query,
@@ -300,6 +302,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       case _Section.shows:
         return _LibrarySection(
+          key: const ValueKey(_Section.shows),
           mode: _ContentMode.showsOnly,
           combinedFilter: _CombinedFilter.none,
           query: _query,
@@ -324,6 +327,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         return const MpaListScreen();
       case _Section.latestAdditions:
         return _LibrarySection(
+          key: const ValueKey(_Section.latestAdditions),
           mode: _ContentMode.combined,
           combinedFilter: _CombinedFilter.none,
           query: _query,
@@ -342,6 +346,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       case _Section.favorites:
         return _LibrarySection(
+          key: const ValueKey(_Section.favorites),
           mode: _ContentMode.combined,
           combinedFilter: _CombinedFilter.favorites,
           query: _query,
@@ -360,6 +365,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       case _Section.notYetWatched:
         return _LibrarySection(
+          key: const ValueKey(_Section.notYetWatched),
           mode: _ContentMode.combined,
           combinedFilter: _CombinedFilter.notWatched,
           query: _query,
@@ -378,6 +384,7 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       case _Section.watched:
         return _LibrarySection(
+          key: const ValueKey(_Section.watched),
           mode: _ContentMode.combined,
           combinedFilter: _CombinedFilter.watched,
           query: _query,
@@ -792,7 +799,7 @@ class _AlphabetIndex extends StatelessWidget {
 // one implementation via MediaItem.
 // ---------------------------------------------------------------------------
 
-class _LibrarySection extends ConsumerWidget {
+class _LibrarySection extends ConsumerStatefulWidget {
   final _ContentMode mode;
   final _CombinedFilter combinedFilter;
   final String query;
@@ -810,6 +817,7 @@ class _LibrarySection extends ConsumerWidget {
   final String emptySubtitle;
 
   const _LibrarySection({
+    super.key,
     required this.mode,
     required this.combinedFilter,
     required this.query,
@@ -828,24 +836,72 @@ class _LibrarySection extends ConsumerWidget {
   });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<_LibrarySection> createState() => _LibrarySectionState();
+}
+
+class _LibrarySectionState extends ConsumerState<_LibrarySection> {
+  bool _selecting = false;
+  final Set<String> _selectedKeys = {};
+  final Map<String, MediaItem> _selectedItems = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selecting = !_selecting;
+      _selectedKeys.clear();
+      _selectedItems.clear();
+    });
+  }
+
+  void _toggleItem(MediaItem item) {
+    setState(() {
+      if (_selectedKeys.contains(item.selectionKey)) {
+        _selectedKeys.remove(item.selectionKey);
+        _selectedItems.remove(item.selectionKey);
+      } else {
+        _selectedKeys.add(item.selectionKey);
+        _selectedItems[item.selectionKey] = item;
+      }
+    });
+  }
+
+  Future<void> _refreshSelected(MetadataRefreshMode mode) async {
+    final targets = _selectedItems.values
+        .map((item) => (kind: item.kind, id: item.id))
+        .toList();
+    await ref
+        .read(scanControllerProvider.notifier)
+        .refreshMultiple(targets, mode);
+    if (mounted) {
+      setState(() {
+        _selecting = false;
+        _selectedKeys.clear();
+        _selectedItems.clear();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final moviesAsync = ref.watch(moviesStreamProvider);
-    final needsShows =
-        mode == _ContentMode.showsOnly || mode == _ContentMode.combined;
+    final needsShows = widget.mode == _ContentMode.showsOnly ||
+        widget.mode == _ContentMode.combined;
     final List<Show> shows = needsShows
         ? (ref.watch(showsStreamProvider).value ?? const <Show>[])
         : const <Show>[];
     final needsEpisodes =
-        needsShows && combinedFilter != _CombinedFilter.none;
+        needsShows && widget.combinedFilter != _CombinedFilter.none;
     final List<Episode> episodes = needsEpisodes
         ? (ref.watch(allEpisodesStreamProvider).value ?? const <Episode>[])
         : const <Episode>[];
+    final busy = ref.watch(scanControllerProvider).status ==
+        ScanStatus.matching;
 
     return moviesAsync.when(
       data: (movies) {
         final items = <MediaItem>[];
 
-        if (mode == _ContentMode.moviesOnly || mode == _ContentMode.combined) {
+        if (widget.mode == _ContentMode.moviesOnly ||
+            widget.mode == _ContentMode.combined) {
           for (final m in movies) {
             items.add(MediaItem(
               kind: 'movie',
@@ -900,32 +956,33 @@ class _LibrarySection extends ConsumerWidget {
         }
 
         var filtered = items.where((item) {
-          if (query.isNotEmpty &&
-              !item.title.toLowerCase().contains(query)) {
+          if (widget.query.isNotEmpty &&
+              !item.title.toLowerCase().contains(widget.query)) {
             return false;
           }
-          if (letter != null) {
+          if (widget.letter != null) {
             final first =
                 item.title.isEmpty ? '#' : item.title[0].toLowerCase();
-            if (letter == '#') {
+            if (widget.letter == '#') {
               if (RegExp(r'[a-z]').hasMatch(first)) return false;
-            } else if (first != letter) {
+            } else if (first != widget.letter) {
               return false;
             }
           }
-          if (selectedGenre != null) {
+          if (widget.selectedGenre != null) {
             final genres =
                 (item.genres ?? '').split(',').map((g) => g.trim());
-            if (!genres.contains(selectedGenre)) return false;
+            if (!genres.contains(widget.selectedGenre)) return false;
           }
-          if (selectedYear != null && item.year != selectedYear) {
+          if (widget.selectedYear != null &&
+              item.year != widget.selectedYear) {
             return false;
           }
-          if (minRating != null &&
-              (item.rating == null || item.rating! < minRating!)) {
+          if (widget.minRating != null &&
+              (item.rating == null || item.rating! < widget.minRating!)) {
             return false;
           }
-          switch (combinedFilter) {
+          switch (widget.combinedFilter) {
             case _CombinedFilter.favorites:
               if (!item.isFavorite) return false;
               break;
@@ -941,7 +998,7 @@ class _LibrarySection extends ConsumerWidget {
           return true;
         }).toList();
 
-        sortMediaItems(filtered, sort);
+        sortMediaItems(filtered, widget.sort);
 
         final genreSet = <String>{};
         final yearSet = <int>{};
@@ -959,26 +1016,54 @@ class _LibrarySection extends ConsumerWidget {
 
         return Column(
           children: [
+            if (_selecting)
+              SelectionActionBar(
+                selectedCount: _selectedKeys.length,
+                totalCount: filtered.length,
+                busy: busy,
+                onSelectAll: () => setState(() {
+                  for (final item in filtered) {
+                    _selectedKeys.add(item.selectionKey);
+                    _selectedItems[item.selectionKey] = item;
+                  }
+                }),
+                onClear: () => setState(() {
+                  _selectedKeys.clear();
+                  _selectedItems.clear();
+                }),
+                onCancel: _toggleSelectionMode,
+                onRefresh: _refreshSelected,
+              ),
             SortFilterBar(
-              sort: sort,
-              onSortChanged: onSortChanged,
-              selectedGenre: selectedGenre,
+              sort: widget.sort,
+              onSortChanged: widget.onSortChanged,
+              selectedGenre: widget.selectedGenre,
               availableGenres: genreList,
-              onGenreChanged: onGenreChanged,
-              selectedYear: selectedYear,
+              onGenreChanged: widget.onGenreChanged,
+              selectedYear: widget.selectedYear,
               availableYears: yearList,
-              onYearChanged: onYearChanged,
-              minRating: minRating,
-              onMinRatingChanged: onMinRatingChanged,
+              onYearChanged: widget.onYearChanged,
+              minRating: widget.minRating,
+              onMinRatingChanged: widget.onMinRatingChanged,
+              trailing: IconButton(
+                icon: Icon(_selecting ? Icons.close : Icons.checklist),
+                tooltip: _selecting ? 'Cancel selection' : 'Select multiple',
+                onPressed: filtered.isEmpty && !_selecting
+                    ? null
+                    : _toggleSelectionMode,
+              ),
             ),
             Expanded(
               child: MediaItemView(
                 items: filtered,
-                gridView: gridView,
-                emptyTitle: items.isEmpty ? emptyTitle : 'No matches',
+                gridView: widget.gridView,
+                emptyTitle: items.isEmpty ? widget.emptyTitle : 'No matches',
                 emptySubtitle: items.isEmpty
-                    ? emptySubtitle
+                    ? widget.emptySubtitle
                     : 'Try a different search or clear filters.',
+                selectionMode: _selecting,
+                selectedKeys: _selectedKeys,
+                onToggleSelect: _toggleItem,
               ),
             ),
           ],

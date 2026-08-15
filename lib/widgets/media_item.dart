@@ -34,6 +34,10 @@ class MediaItem {
     required this.dateAdded,
     required this.onTap,
   });
+
+  /// Unique key for multi-select tracking -- movie and show ids share the
+  /// same integer space, so the kind must be part of the key.
+  String get selectionKey => '$kind:$id';
 }
 
 enum SortOption {

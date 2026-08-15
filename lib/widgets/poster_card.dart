@@ -11,6 +11,8 @@ class PosterCard extends StatelessWidget {
   final bool watched;
   final VoidCallback onTap;
   final VoidCallback? onToggleWatched;
+  final bool selectionMode;
+  final bool selected;
 
   const PosterCard({
     super.key,
@@ -20,6 +22,8 @@ class PosterCard extends StatelessWidget {
     required this.watched,
     required this.onTap,
     this.onToggleWatched,
+    this.selectionMode = false,
+    this.selected = false,
   });
 
   @override
@@ -36,16 +40,51 @@ class PosterCard extends StatelessWidget {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: posterUrl != null && posterUrl!.isNotEmpty
-                      ? SmartImage(
-                          path: posterUrl!,
-                          fit: BoxFit.cover,
-                          thumbnailBytes: thumbnailBytes,
-                          errorBuilder: (context) => _fallback(),
-                        )
-                      : _fallback(),
+                  child: Container(
+                    decoration: selected
+                        ? BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(context).colorScheme.primary,
+                              width: 3,
+                            ),
+                            borderRadius: BorderRadius.circular(8),
+                          )
+                        : null,
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: posterUrl != null && posterUrl!.isNotEmpty
+                          ? SmartImage(
+                              path: posterUrl!,
+                              fit: BoxFit.cover,
+                              thumbnailBytes: thumbnailBytes,
+                              errorBuilder: (context) => _fallback(),
+                            )
+                          : _fallback(),
+                    ),
+                  ),
                 ),
-                if (onToggleWatched != null)
+                if (selectionMode)
+                  Positioned(
+                    top: 6,
+                    left: 6,
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        color: Colors.black45,
+                        shape: BoxShape.circle,
+                      ),
+                      padding: const EdgeInsets.all(2),
+                      child: Icon(
+                        selected
+                            ? Icons.check_circle
+                            : Icons.radio_button_unchecked,
+                        size: 20,
+                        color: selected
+                            ? Theme.of(context).colorScheme.primary
+                            : Colors.white70,
+                      ),
+                    ),
+                  )
+                else if (onToggleWatched != null)
                   Positioned(
                     top: 6,
                     right: 6,

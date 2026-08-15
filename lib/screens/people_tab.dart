@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../utils/metadata_refresh_mode.dart';
+import '../widgets/media_grid.dart';
 import '../widgets/smart_image.dart';
 import 'person_detail_screen.dart';
 
@@ -30,6 +32,35 @@ class PeopleTab extends ConsumerStatefulWidget {
 class _PeopleTabState extends ConsumerState<PeopleTab> {
   String _query = '';
   PersonSortOption _sort = PersonSortOption.nameAsc;
+  bool _selecting = false;
+  final Set<int> _selectedIds = {};
+
+  void _toggleSelectionMode() {
+    setState(() {
+      _selecting = !_selecting;
+      _selectedIds.clear();
+    });
+  }
+
+  void _toggleSelected(int personId) {
+    setState(() {
+      if (!_selectedIds.remove(personId)) {
+        _selectedIds.add(personId);
+      }
+    });
+  }
+
+  Future<void> _refreshSelected(MetadataRefreshMode mode) async {
+    await ref
+        .read(scanControllerProvider.notifier)
+        .refreshMultiplePeople(_selectedIds.toList(), mode);
+    if (mounted) {
+      setState(() {
+        _selecting = false;
+        _selectedIds.clear();
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -40,6 +71,8 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final showsAsync = ref.watch(showsStreamProvider);
     final episodesAsync = ref.watch(allEpisodesStreamProvider);
+    final busy =
+        ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return Column(
       children: [
@@ -74,9 +107,33 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                   if (v != null) setState(() => _sort = v);
                 },
               ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: Icon(_selecting ? Icons.close : Icons.checklist),
+                tooltip: _selecting ? 'Cancel selection' : 'Select multiple',
+                onPressed: _toggleSelectionMode,
+              ),
             ],
           ),
         ),
+        if (_selecting)
+          peopleAsync.maybeWhen(
+            data: (people) => SelectionActionBar(
+              selectedCount: _selectedIds.length,
+              totalCount: people.length,
+              busy: busy,
+              imageLabel: 'photo',
+              onSelectAll: () => setState(() {
+                _selectedIds
+                  ..clear()
+                  ..addAll(people.map((p) => p.id));
+              }),
+              onClear: () => setState(() => _selectedIds.clear()),
+              onCancel: _toggleSelectionMode,
+              onRefresh: _refreshSelected,
+            ),
+            orElse: () => const SizedBox.shrink(),
+          ),
         Expanded(
           child: peopleAsync.when(
             data: (people) {
@@ -187,28 +244,63 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                                     roleByPerson[person.id] ?? {};
                                 final roleLabel = _summarizeRoles(roles);
                                 final count = countByPerson[person.id] ?? 0;
+                                final selected =
+                                    _selectedIds.contains(person.id);
                                 return InkWell(
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => PersonDetailScreen(
-                                          personId: person.id),
-                                    ),
-                                  ),
+                                  onTap: _selecting
+                                      ? () => _toggleSelected(person.id)
+                                      : () => Navigator.of(context).push(
+                                            MaterialPageRoute(
+                                              builder: (_) =>
+                                                  PersonDetailScreen(
+                                                      personId: person.id),
+                                            ),
+                                          ),
                                   child: Column(
                                     children: [
-                                      CircleAvatar(
-                                        radius: 36,
-                                        backgroundColor: Colors.white10,
-                                        backgroundImage:
-                                            person.photoPath != null
-                                                ? smartImageProvider(
-                                                    person.photoPath!)
+                                      Stack(
+                                        clipBehavior: Clip.none,
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 36,
+                                            backgroundColor: Colors.white10,
+                                            backgroundImage:
+                                                person.photoPath != null
+                                                    ? smartImageProvider(
+                                                        person.photoPath!)
+                                                    : null,
+                                            child: person.photoPath == null
+                                                ? const Icon(Icons.person,
+                                                    color: Colors.white38,
+                                                    size: 32)
                                                 : null,
-                                        child: person.photoPath == null
-                                            ? const Icon(Icons.person,
-                                                color: Colors.white38,
-                                                size: 32)
-                                            : null,
+                                          ),
+                                          if (_selecting)
+                                            Positioned(
+                                              top: -2,
+                                              right: -2,
+                                              child: Container(
+                                                decoration: const BoxDecoration(
+                                                  color: Colors.black45,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.all(2),
+                                                child: Icon(
+                                                  selected
+                                                      ? Icons.check_circle
+                                                      : Icons
+                                                          .radio_button_unchecked,
+                                                  size: 20,
+                                                  color: selected
+                                                      ? Theme.of(context)
+                                                          .colorScheme
+                                                          .primary
+                                                      : Colors.white70,
+                                                ),
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                       const SizedBox(height: 6),
                                       Text(

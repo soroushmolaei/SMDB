@@ -10,6 +10,7 @@ import '../widgets/credits_grid.dart';
 import '../widgets/detail_top_bar.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import '../widgets/personal_rating_stars.dart';
+import '../widgets/refresh_metadata_button.dart';
 import '../widgets/score_badge.dart';
 import '../widgets/smart_image.dart';
 import '../widgets/watch_history_section.dart';
@@ -283,38 +284,25 @@ class MovieDetailScreen extends ConsumerWidget {
               ),
               DetailTopBar(
                 actions: [
-                  HeroIconButton(
-                    icon: refreshing
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor:
-                                  AlwaysStoppedAnimation(Colors.white),
+                  RefreshMetadataButton(
+                    busy: refreshing,
+                    onSelected: (mode) async {
+                      final ok = await ref
+                          .read(scanControllerProvider.notifier)
+                          .refreshMovie(movie.id, mode: mode);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              ok
+                                  ? 'Updated'
+                                  : 'No match found — try Edit → '
+                                      'Wrong match? instead',
                             ),
-                          )
-                        : const Icon(Icons.refresh),
-                    tooltip: 'Update metadata',
-                    onPressed: refreshing
-                        ? null
-                        : () async {
-                            final ok = await ref
-                                .read(scanControllerProvider.notifier)
-                                .refreshMovie(movie.id);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text(
-                                    ok
-                                        ? 'Updated'
-                                        : 'No match found — try Edit → '
-                                            'Wrong match? instead',
-                                  ),
-                                ),
-                              );
-                            }
-                          },
+                          ),
+                        );
+                      }
+                    },
                   ),
                   HeroIconButton(
                     icon: const Icon(Icons.edit_outlined),
