@@ -16,6 +16,7 @@ import 'people_tab.dart';
 import 'settings_screen.dart';
 import 'show_detail_screen.dart';
 import 'statistics_screen.dart';
+import 'year_screen.dart';
 
 enum _Section {
   movies,
@@ -28,6 +29,7 @@ enum _Section {
   notYetWatched,
   watched,
   statistics,
+  year,
 }
 
 enum _ContentMode { moviesOnly, showsOnly, combined }
@@ -73,6 +75,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return 'Watched';
       case _Section.statistics:
         return 'Statistics';
+      case _Section.year:
+        return 'Year';
     }
   }
 
@@ -403,6 +407,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         );
       case _Section.statistics:
         return const StatisticsScreen();
+      case _Section.year:
+        return const YearScreen();
     }
   }
 }
@@ -527,6 +533,12 @@ class _Sidebar extends StatelessWidget {
                   label: 'Statistics',
                   selected: selected == _Section.statistics,
                   onTap: () => onSelect(_Section.statistics),
+                ),
+                _NavItem(
+                  icon: Icons.timeline,
+                  label: 'Year',
+                  selected: selected == _Section.year,
+                  onTap: () => onSelect(_Section.year),
                 ),
                 const SizedBox(height: 12),
                 Padding(
