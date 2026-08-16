@@ -199,13 +199,16 @@ class GenreDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<GenreDetailScreen> createState() => _GenreDetailScreenState();
 }
 
-class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen> {
+class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
+    with MediaSelectionMixin<GenreDetailScreen> {
   SortOption _sort = SortOption.titleAsc;
 
   @override
   Widget build(BuildContext context) {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final shows = ref.watch(showsStreamProvider).value ?? [];
+    final busy =
+        ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.genres.join(' + '))),
@@ -259,9 +262,25 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen> {
 
           return Column(
             children: [
+              if (selecting)
+                SelectionActionBar(
+                  selectedCount: selectedKeys.length,
+                  totalCount: items.length,
+                  busy: busy,
+                  onSelectAll: () => selectAll(items),
+                  onClear: clearSelection,
+                  onCancel: toggleSelectionMode,
+                  onRefresh: refreshSelected,
+                ),
               SortFilterBar(
                 sort: _sort,
                 onSortChanged: (s) => setState(() => _sort = s),
+                trailing: IconButton(
+                  icon: Icon(selecting ? Icons.close : Icons.checklist),
+                  tooltip: selecting ? 'Cancel selection' : 'Select multiple',
+                  onPressed:
+                      items.isEmpty && !selecting ? null : toggleSelectionMode,
+                ),
               ),
               Expanded(
                 child: MediaItemView(
@@ -270,6 +289,9 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen> {
                   emptyTitle: widget.genres.length > 1
                       ? 'No movies or shows have all of these genres'
                       : 'No movies or shows in this genre',
+                  selectionMode: selecting,
+                  selectedKeys: selectedKeys,
+                  onToggleSelect: toggleItemSelection,
                 ),
               ),
             ],

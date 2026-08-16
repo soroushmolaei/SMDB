@@ -98,13 +98,16 @@ class MpaMoviesScreen extends ConsumerStatefulWidget {
   ConsumerState<MpaMoviesScreen> createState() => _MpaMoviesScreenState();
 }
 
-class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen> {
+class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
+    with MediaSelectionMixin<MpaMoviesScreen> {
   SortOption _sort = SortOption.titleAsc;
 
   @override
   Widget build(BuildContext context) {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final shows = ref.watch(showsStreamProvider).value ?? [];
+    final busy =
+        ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.rating)),
@@ -156,15 +159,34 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen> {
 
           return Column(
             children: [
+              if (selecting)
+                SelectionActionBar(
+                  selectedCount: selectedKeys.length,
+                  totalCount: items.length,
+                  busy: busy,
+                  onSelectAll: () => selectAll(items),
+                  onClear: clearSelection,
+                  onCancel: toggleSelectionMode,
+                  onRefresh: refreshSelected,
+                ),
               SortFilterBar(
                 sort: _sort,
                 onSortChanged: (s) => setState(() => _sort = s),
+                trailing: IconButton(
+                  icon: Icon(selecting ? Icons.close : Icons.checklist),
+                  tooltip: selecting ? 'Cancel selection' : 'Select multiple',
+                  onPressed:
+                      items.isEmpty && !selecting ? null : toggleSelectionMode,
+                ),
               ),
               Expanded(
                 child: MediaItemView(
                   items: items,
                   gridView: true,
                   emptyTitle: 'No movies or shows with this rating',
+                  selectionMode: selecting,
+                  selectedKeys: selectedKeys,
+                  onToggleSelect: toggleItemSelection,
                 ),
               ),
             ],

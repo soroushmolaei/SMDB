@@ -15,7 +15,8 @@ class GroupDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<GroupDetailScreen> createState() => _GroupDetailScreenState();
 }
 
-class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
+class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
+    with MediaSelectionMixin<GroupDetailScreen> {
   SortOption _sort = SortOption.titleAsc;
 
   Future<void> _rename(String currentName) async {
@@ -80,6 +81,8 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
         ref.watch(collectionShowLinksProvider(widget.collectionId));
     final moviesAsync = ref.watch(moviesStreamProvider);
     final showsAsync = ref.watch(showsStreamProvider);
+    final busy =
+        ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return collectionsAsync.when(
       data: (collections) {
@@ -103,95 +106,119 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen> {
               ),
             ],
           ),
-          body: Column(
-            children: [
-              SortFilterBar(
-                sort: _sort,
-                onSortChanged: (s) => setState(() => _sort = s),
-              ),
-              Expanded(
-                child: movieLinksAsync.when(
-                  data: (movieLinks) => showLinksAsync.when(
-                    data: (showLinks) => moviesAsync.when(
-                      data: (movies) => showsAsync.when(
-                        data: (shows) {
-                          final movieIds =
-                              movieLinks.map((l) => l.movieId).toSet();
-                          final showIds =
-                              showLinks.map((l) => l.showId).toSet();
+          body: movieLinksAsync.when(
+            data: (movieLinks) => showLinksAsync.when(
+              data: (showLinks) => moviesAsync.when(
+                data: (movies) => showsAsync.when(
+                  data: (shows) {
+                    final movieIds =
+                        movieLinks.map((l) => l.movieId).toSet();
+                    final showIds =
+                        showLinks.map((l) => l.showId).toSet();
 
-                          final items = <MediaItem>[
-                            ...movies
-                                .where((m) => movieIds.contains(m.id))
-                                .map((m) => MediaItem(
-                                      kind: 'movie',
-                                      id: m.id,
-                                      title: m.title,
-                                      year: m.year,
-                                      posterPath: m.posterPath,
-                                      posterThumbnail: m.posterThumbnail,
-                                      rating: m.rating,
-                                      genres: m.genres,
-                                      watched: m.watched,
-                                      isFavorite: m.isFavorite,
-                                      dateAdded: m.dateAdded,
-                                      onTap: () => Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) => MovieDetailScreen(
-                                              movieId: m.id),
-                                        ),
-                                      ),
-                                    )),
-                            ...shows
-                                .where((s) => showIds.contains(s.id))
-                                .map((s) => MediaItem(
-                                      kind: 'show',
-                                      id: s.id,
-                                      title: s.title,
-                                      year: null,
-                                      posterPath: s.posterPath,
-                                      posterThumbnail: s.posterThumbnail,
-                                      rating: s.rating,
-                                      genres: s.genres,
-                                      watched: false,
-                                      isFavorite: s.isFavorite,
-                                      dateAdded: s.dateAdded,
-                                      onTap: () => Navigator.of(context).push(
-                                        MaterialPageRoute(
-                                          builder: (_) =>
-                                              ShowDetailScreen(showId: s.id),
-                                        ),
-                                      ),
-                                    )),
-                          ];
-                          sortMediaItems(items, _sort);
+                    final items = <MediaItem>[
+                      ...movies
+                          .where((m) => movieIds.contains(m.id))
+                          .map((m) => MediaItem(
+                                kind: 'movie',
+                                id: m.id,
+                                title: m.title,
+                                year: m.year,
+                                posterPath: m.posterPath,
+                                posterThumbnail: m.posterThumbnail,
+                                rating: m.rating,
+                                genres: m.genres,
+                                watched: m.watched,
+                                isFavorite: m.isFavorite,
+                                dateAdded: m.dateAdded,
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        MovieDetailScreen(movieId: m.id),
+                                  ),
+                                ),
+                              )),
+                      ...shows
+                          .where((s) => showIds.contains(s.id))
+                          .map((s) => MediaItem(
+                                kind: 'show',
+                                id: s.id,
+                                title: s.title,
+                                year: null,
+                                posterPath: s.posterPath,
+                                posterThumbnail: s.posterThumbnail,
+                                rating: s.rating,
+                                genres: s.genres,
+                                watched: false,
+                                isFavorite: s.isFavorite,
+                                dateAdded: s.dateAdded,
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) =>
+                                        ShowDetailScreen(showId: s.id),
+                                  ),
+                                ),
+                              )),
+                    ];
+                    sortMediaItems(items, _sort);
 
-                          return MediaItemView(
+                    return Column(
+                      children: [
+                        if (selecting)
+                          SelectionActionBar(
+                            selectedCount: selectedKeys.length,
+                            totalCount: items.length,
+                            busy: busy,
+                            onSelectAll: () => selectAll(items),
+                            onClear: clearSelection,
+                            onCancel: toggleSelectionMode,
+                            onRefresh: refreshSelected,
+                          ),
+                        SortFilterBar(
+                          sort: _sort,
+                          onSortChanged: (s) => setState(() => _sort = s),
+                          trailing: IconButton(
+                            icon: Icon(selecting
+                                ? Icons.close
+                                : Icons.checklist),
+                            tooltip: selecting
+                                ? 'Cancel selection'
+                                : 'Select multiple',
+                            onPressed: items.isEmpty && !selecting
+                                ? null
+                                : toggleSelectionMode,
+                          ),
+                        ),
+                        Expanded(
+                          child: MediaItemView(
                             items: items,
                             gridView: true,
                             emptyTitle: 'Nothing in this group yet',
                             emptySubtitle: 'Add movies or shows to it from '
                                 'their detail page.',
-                          );
-                        },
-                        loading: () => const Center(
-                            child: CircularProgressIndicator()),
-                        error: (e, st) => Center(child: Text('Error: $e')),
-                      ),
-                      loading: () =>
-                          const Center(child: CircularProgressIndicator()),
-                      error: (e, st) => Center(child: Text('Error: $e')),
-                    ),
-                    loading: () =>
-                        const Center(child: CircularProgressIndicator()),
-                    error: (e, st) => Center(child: Text('Error: $e')),
-                  ),
+                            selectionMode: selecting,
+                            selectedKeys: selectedKeys,
+                            onToggleSelect: toggleItemSelection,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),
                   error: (e, st) => Center(child: Text('Error: $e')),
                 ),
+                loading: () =>
+                    const Center(child: CircularProgressIndicator()),
+                error: (e, st) => Center(child: Text('Error: $e')),
               ),
-            ],
+              loading: () =>
+                  const Center(child: CircularProgressIndicator()),
+              error: (e, st) => Center(child: Text('Error: $e')),
+            ),
+            loading: () =>
+                const Center(child: CircularProgressIndicator()),
+            error: (e, st) => Center(child: Text('Error: $e')),
           ),
         );
       },

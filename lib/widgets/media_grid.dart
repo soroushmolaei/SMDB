@@ -1,8 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../providers/providers.dart';
 import '../utils/metadata_refresh_mode.dart';
 import 'media_item.dart';
 import 'poster_card.dart';
+
+/// Multi-select state and bulk-refresh wiring for any screen listing
+/// [MediaItem]s (movies/shows) via [MediaItemView]. Mix this into a
+/// `ConsumerState` to get selection tracking and a [refreshSelected]
+/// that calls [ScanController.refreshMultiple] for free -- used by the
+/// genre/content-rating/group/shared-filmography drill-down screens.
+mixin MediaSelectionMixin<T extends ConsumerStatefulWidget>
+    on ConsumerState<T> {
+  bool selecting = false;
+  final Set<String> selectedKeys = {};
+  final Map<String, MediaItem> selectedItems = {};
+
+  void toggleSelectionMode() {
+    setState(() {
+      selecting = !selecting;
+      selectedKeys.clear();
+      selectedItems.clear();
+    });
+  }
+
+  void toggleItemSelection(MediaItem item) {
+    setState(() {
+      if (selectedKeys.remove(item.selectionKey)) {
+        selectedItems.remove(item.selectionKey);
+      } else {
+        selectedKeys.add(item.selectionKey);
+        selectedItems[item.selectionKey] = item;
+      }
+    });
+  }
+
+  void selectAll(List<MediaItem> items) {
+    setState(() {
+      for (final item in items) {
+        selectedKeys.add(item.selectionKey);
+        selectedItems[item.selectionKey] = item;
+      }
+    });
+  }
+
+  void clearSelection() {
+    setState(() {
+      selectedKeys.clear();
+      selectedItems.clear();
+    });
+  }
+
+  Future<void> refreshSelected(MetadataRefreshMode mode) async {
+    final targets = selectedItems.values
+        .map((item) => (kind: item.kind, id: item.id))
+        .toList();
+    await ref
+        .read(scanControllerProvider.notifier)
+        .refreshMultiple(targets, mode);
+    if (mounted) {
+      setState(() {
+        selecting = false;
+        selectedKeys.clear();
+        selectedItems.clear();
+      });
+    }
+  }
+}
 
 /// A compact row of sort/filter dropdowns, reusable across any screen that
 /// lists movies and/or shows.

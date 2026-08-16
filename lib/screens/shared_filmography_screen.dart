@@ -30,7 +30,8 @@ class SharedFilmographyScreen extends ConsumerStatefulWidget {
 }
 
 class _SharedFilmographyScreenState
-    extends ConsumerState<SharedFilmographyScreen> {
+    extends ConsumerState<SharedFilmographyScreen>
+    with MediaSelectionMixin<SharedFilmographyScreen> {
   SortOption _sort = SortOption.titleAsc;
   bool _gridView = true;
 
@@ -51,6 +52,8 @@ class _SharedFilmographyScreenState
     final moviesAsync = ref.watch(moviesStreamProvider);
     final showsAsync = ref.watch(showsStreamProvider);
     final episodesAsync = ref.watch(allEpisodesStreamProvider);
+    final busy =
+        ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return Scaffold(
       appBar: AppBar(
@@ -157,9 +160,29 @@ class _SharedFilmographyScreenState
 
                     return Column(
                       children: [
+                        if (selecting)
+                          SelectionActionBar(
+                            selectedCount: selectedKeys.length,
+                            totalCount: items.length,
+                            busy: busy,
+                            onSelectAll: () => selectAll(items),
+                            onClear: clearSelection,
+                            onCancel: toggleSelectionMode,
+                            onRefresh: refreshSelected,
+                          ),
                         SortFilterBar(
                           sort: _sort,
                           onSortChanged: (s) => setState(() => _sort = s),
+                          trailing: IconButton(
+                            icon: Icon(
+                                selecting ? Icons.close : Icons.checklist),
+                            tooltip: selecting
+                                ? 'Cancel selection'
+                                : 'Select multiple',
+                            onPressed: items.isEmpty && !selecting
+                                ? null
+                                : toggleSelectionMode,
+                          ),
                         ),
                         Expanded(
                           child: MediaItemView(
@@ -168,6 +191,9 @@ class _SharedFilmographyScreenState
                             emptyTitle: 'No shared titles',
                             emptySubtitle: 'These people have not '
                                 'appeared in anything together yet.',
+                            selectionMode: selecting,
+                            selectedKeys: selectedKeys,
+                            onToggleSelect: toggleItemSelection,
                           ),
                         ),
                       ],
