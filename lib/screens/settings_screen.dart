@@ -455,6 +455,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final foldersAsync = ref.watch(foldersStreamProvider);
     final dbPathAsync = ref.watch(databasePathProvider);
     final thumbnailBackfill = ref.watch(thumbnailBackfillProvider);
+    final originalImageDownload = ref.watch(originalImageDownloadProvider);
     final scanState = ref.watch(scanControllerProvider);
     final isScanning = scanState.status == ScanStatus.scanning ||
         scanState.status == ScanStatus.matching;
@@ -474,6 +475,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onSurfaceVariant,
             dbPathAsync,
             thumbnailBackfill,
+            originalImageDownload,
             foldersAsync,
             scanState,
             isScanning,
@@ -491,6 +493,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     Color onSurfaceVariant,
     AsyncValue<String> dbPathAsync,
     ThumbnailBackfillState thumbnailBackfill,
+    OriginalImageDownloadState originalImageDownload,
     AsyncValue<List<LibraryFolder>> foldersAsync,
     ScanState scanState,
     bool isScanning,
@@ -500,7 +503,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _appearanceSection(themeSettings, onSurface, onSurfaceVariant),
       _SettingsCategory.api: _apiSection(),
       _SettingsCategory.database: _databaseSection(dbPathAsync),
-      _SettingsCategory.storage: _storageSection(thumbnailBackfill),
+      _SettingsCategory.storage:
+          _storageSection(thumbnailBackfill, originalImageDownload),
       _SettingsCategory.library:
           _librarySection(foldersAsync, scanState, isScanning),
     };
@@ -898,7 +902,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ];
   }
 
-  List<Widget> _storageSection(ThumbnailBackfillState thumbnailBackfill) {
+  List<Widget> _storageSection(
+    ThumbnailBackfillState thumbnailBackfill,
+    OriginalImageDownloadState originalImageDownload,
+  ) {
     return [
               const Text(
                 'Offline Thumbnails',
@@ -941,6 +948,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Text(
                       'Saved ${thumbnailBackfill.downloaded} of '
                       '${thumbnailBackfill.processed}.',
+                      style: const TextStyle(
+                        color: Colors.white54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 20),
+              const Text(
+                'Original-Quality Images',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'Saves a full-resolution poster.jpg and backdrop.jpg next '
+                'to every movie file and show folder in your library -- '
+                'useful for backups, printing, or another app. This is '
+                'separate from the small thumbnails above and can take a '
+                'while and use significant disk space for a large library.',
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: originalImageDownload.running
+                        ? null
+                        : () => ref
+                            .read(originalImageDownloadProvider.notifier)
+                            .run(),
+                    icon: originalImageDownload.running
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.high_quality, size: 16),
+                    label: Text(
+                      originalImageDownload.running
+                          ? 'Downloading ${originalImageDownload.processed}/'
+                              '${originalImageDownload.total}...'
+                          : 'Download Original-Quality Posters & Backdrops',
+                    ),
+                  ),
+                  if (!originalImageDownload.running &&
+                      originalImageDownload.processed > 0) ...[
+                    const SizedBox(width: 12),
+                    Text(
+                      'Saved ${originalImageDownload.saved} of '
+                      '${originalImageDownload.processed}'
+                      '${originalImageDownload.failed > 0 ? ' (${originalImageDownload.failed} failed)' : ''}.',
                       style: const TextStyle(
                         color: Colors.white54,
                         fontSize: 12,
