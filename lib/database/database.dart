@@ -79,6 +79,7 @@ class Shows extends Table {
   BoolColumn get awardsChecked =>
       boolean().withDefault(const Constant(false))();
   TextColumn get originalLanguage => text().nullable()();
+  IntColumn get year => integer().nullable()(); // first air year
 }
 
 @DataClassName('Episode')
@@ -247,7 +248,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 14;
+  int get schemaVersion => 15;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -341,6 +342,9 @@ class AppDatabase extends _$AppDatabase {
             await m.addColumn(movies, movies.originalLanguage);
             await m.addColumn(shows, shows.originalLanguage);
             await m.addColumn(episodes, episodes.runtimeMinutes);
+          }
+          if (from < 15) {
+            await m.addColumn(shows, shows.year);
           }
         },
       );
@@ -520,6 +524,8 @@ class AppDatabase extends _$AppDatabase {
 
   Future<Show?> getShowById(int id) =>
       (select(shows)..where((s) => s.id.equals(id))).getSingleOrNull();
+
+  Future<List<Show>> getAllShows() => select(shows).get();
 
   Future<Show?> getShowByFolderPath(String folderPath) =>
       (select(shows)..where((s) => s.folderPath.equals(folderPath)))

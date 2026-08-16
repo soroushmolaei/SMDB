@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:http/http.dart' as http;
 
 import '../database/database.dart';
 import '../services/app_config_service.dart';
@@ -326,6 +328,7 @@ class _ShowMatch {
   final String? contentRating;
   final String? status;
   final String? originalLanguage;
+  final int? year;
   final List<MovieCreditInput> credits;
 
   _ShowMatch({
@@ -339,6 +342,7 @@ class _ShowMatch {
     this.contentRating,
     this.status,
     this.originalLanguage,
+    this.year,
     this.credits = const [],
   });
 }
@@ -366,6 +370,24 @@ String? _primaryLanguageFromOmdb(String? raw) {
   if (cleaned == null) return null;
   final first = cleaned.split(',').first.trim();
   return first.isEmpty ? null : first;
+}
+
+/// TMDB's `first_air_date` is "YYYY-MM-DD" (or empty/absent for an
+/// unannounced show); only the year is kept, to match `Movies.year`'s
+/// granularity.
+int? _yearFromTmdbDate(String? date) {
+  if (date == null || date.length < 4) return null;
+  return int.tryParse(date.substring(0, 4));
+}
+
+/// OMDb's `Year` field for a TV show is often a range, e.g. "2008–2013"
+/// or "2008–" for one still airing -- using an en-dash, not a hyphen --
+/// so this pulls out the first 4-digit run rather than assuming a
+/// particular separator.
+int? _yearFromOmdb(String? raw) {
+  if (raw == null) return null;
+  final match = RegExp(r'(\d{4})').firstMatch(raw);
+  return match == null ? null : int.tryParse(match.group(1)!);
 }
 
 _TmdbCreditsExtract _extractTmdbCredits(Map<String, dynamic>? creditsMap) {
@@ -956,6 +978,7 @@ class ScanController extends StateNotifier<ScanState> {
             contentRating: Value(match.contentRating),
             status: Value(match.status),
             originalLanguage: Value(match.originalLanguage),
+            year: Value(match.year),
           ));
           try {
             await db.setShowCredits(showId, match.credits);
@@ -1101,6 +1124,7 @@ class ScanController extends StateNotifier<ScanState> {
       contentRating: contentRating,
       status: statusText,
       originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
+      year: _yearFromOmdb(data['Year'] as String?),
       credits: credits,
     );
   }
@@ -1143,6 +1167,7 @@ class ScanController extends StateNotifier<ScanState> {
       contentRating: OmdbService.cleanText(data['Rated'] as String?),
       status: statusText,
       originalLanguage: _primaryLanguageFromOmdb(data['Language'] as String?),
+      year: _yearFromOmdb(data['Year'] as String?),
       credits: credits,
     );
   }
@@ -1210,6 +1235,7 @@ class ScanController extends StateNotifier<ScanState> {
       contentRating: TmdbService.extractShowCertification(details),
       status: details['status'] as String?,
       originalLanguage: languageNameForCode(details['original_language'] as String?),
+      year: _yearFromTmdbDate(details['first_air_date'] as String?),
       credits: credits,
     );
   }
@@ -1558,6 +1584,7 @@ class ScanController extends StateNotifier<ScanState> {
         originalLanguage: includeOtherFields
             ? Value(match.originalLanguage)
             : const Value.absent(),
+        year: includeOtherFields ? Value(match.year) : const Value.absent(),
       ));
       if (includeOtherFields) {
         try {
@@ -1811,4 +1838,145 @@ final thumbnailBackfillProvider = StateNotifierProvider<
     ThumbnailBackfillController, ThumbnailBackfillState>((ref) {
   final db = ref.watch(databaseProvider);
   return ThumbnailBackfillController(db);
+});
+
+/// Given an already-built TMDB image URL (e.g. ".../t/p/w500/abc.jpg"),
+/// swaps in TMDB's "original" size so a full-resolution copy can be
+/// downloaded instead of the smaller display size normally used in the
+/// app. URLs from other sources (e.g. an OMDb-sourced poster) are
+/// returned as-is, since there's no general way to request a
+/// higher-resolution version of those.
+String _originalQualityUrl(String url) {
+  if (!url.contains('image.tmdb.org')) return url;
+  return url.replaceFirst(RegExp(r'/t/p/[^/]+/'), '/t/p/original/');
+}
+
+class OriginalImageDownloadState {
+  final bool running;
+  final int total;
+  final int processed;
+  final int saved;
+  final int failed;
+
+  const OriginalImageDownloadState({
+    this.running = false,
+    this.total = 0,
+    this.processed = 0,
+    this.saved = 0,
+    this.failed = 0,
+  });
+
+  OriginalImageDownloadState copyWith({
+    bool? running,
+    int? total,
+    int? processed,
+    int? saved,
+    int? failed,
+  }) {
+    return OriginalImageDownloadState(
+      running: running ?? this.running,
+      total: total ?? this.total,
+      processed: processed ?? this.processed,
+      saved: saved ?? this.saved,
+      failed: failed ?? this.failed,
+    );
+  }
+}
+
+/// Downloads full-resolution poster/backdrop images and saves them as
+/// poster.jpg / backdrop.jpg next to each movie's file or show's folder
+/// -- unlike the small thumbnails cached in the database for offline
+/// grid display, these are meant to be kept as real files (for use in
+/// another app, backup, printing, etc).
+class OriginalImageDownloadController
+    extends StateNotifier<OriginalImageDownloadState> {
+  final AppDatabase db;
+
+  OriginalImageDownloadController(this.db)
+      : super(const OriginalImageDownloadState());
+
+  Future<void> run() async {
+    if (state.running) return;
+
+    final movies = await db.getAllMovies();
+    final shows = await db.getAllShows();
+    state = OriginalImageDownloadState(
+      running: true,
+      total: movies.length + shows.length,
+    );
+
+    for (final movie in movies) {
+      final ok = await _saveOriginals(
+        folderPath: movie.folderPath,
+        posterUrl: movie.posterPath,
+        backdropUrl: movie.backdropPath,
+      );
+      state = state.copyWith(
+        processed: state.processed + 1,
+        saved: state.saved + (ok ? 1 : 0),
+        failed: state.failed + (ok ? 0 : 1),
+      );
+    }
+
+    for (final show in shows) {
+      final ok = await _saveOriginals(
+        folderPath: show.folderPath,
+        posterUrl: show.posterPath,
+        backdropUrl: show.backdropPath,
+      );
+      state = state.copyWith(
+        processed: state.processed + 1,
+        saved: state.saved + (ok ? 1 : 0),
+        failed: state.failed + (ok ? 0 : 1),
+      );
+    }
+
+    state = state.copyWith(running: false);
+  }
+
+  /// Saves whichever of poster/backdrop are available; counts as "saved"
+  /// if at least one of the two succeeded.
+  Future<bool> _saveOriginals({
+    required String folderPath,
+    required String? posterUrl,
+    required String? backdropUrl,
+  }) async {
+    var savedAny = false;
+    if (posterUrl != null && posterUrl.isNotEmpty) {
+      final ok = await _downloadTo(
+        _originalQualityUrl(posterUrl),
+        '$folderPath${Platform.pathSeparator}poster.jpg',
+      );
+      if (ok) savedAny = true;
+    }
+    if (backdropUrl != null && backdropUrl.isNotEmpty) {
+      final ok = await _downloadTo(
+        _originalQualityUrl(backdropUrl),
+        '$folderPath${Platform.pathSeparator}backdrop.jpg',
+      );
+      if (ok) savedAny = true;
+    }
+    return savedAny;
+  }
+
+  Future<bool> _downloadTo(String url, String filePath) async {
+    try {
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode != 200) return false;
+      final directory = Directory(File(filePath).parent.path);
+      if (!await directory.exists()) return false;
+      await File(filePath).writeAsBytes(response.bodyBytes);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+final originalImageDownloadProvider = StateNotifierProvider<
+    OriginalImageDownloadController, OriginalImageDownloadState>((ref) {
+  final db = ref.watch(databaseProvider);
+  return OriginalImageDownloadController(db);
 });
