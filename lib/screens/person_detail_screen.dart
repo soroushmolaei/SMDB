@@ -206,6 +206,55 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                               ),
                             );
 
+                        // Small muted "MOVIE"/"SHOW" tag, with a gap
+                        // before it, appended after the year in each
+                        // row's trailing area.
+                        Widget typeTag(String label) => Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: Colors.white10,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                label,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  color: Colors.white54,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
+                            );
+
+                        Widget dateAndType(int? year, String label) => Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  year != null ? '$year' : '—',
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 12),
+                                ),
+                                const SizedBox(width: 8),
+                                typeTag(label),
+                              ],
+                            );
+
+                        // Sorts a section's rows by year, newest first
+                        // (unknown years last), so ACTING can merge movie
+                        // and show credits into one chronological list
+                        // instead of two separate blocks.
+                        List<Widget> sortedRows(
+                            List<({int? year, Widget row})> entries) {
+                          final sorted = [...entries]..sort((a, b) {
+                              if (a.year == null && b.year == null) return 0;
+                              if (a.year == null) return 1;
+                              if (b.year == null) return -1;
+                              return b.year!.compareTo(a.year!);
+                            });
+                          return sorted.map((e) => e.row).toList();
+                        }
+
                         Widget posterThumb(String? posterPath,
                                 IconData fallbackIcon) =>
                             SizedBox(
@@ -242,6 +291,7 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                     credit.character!.isNotEmpty
                                 ? Text('as ${credit.character}')
                                 : null,
+                            trailing: dateAndType(movie.year, 'MOVIE'),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) =>
@@ -262,6 +312,7 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                     credit.character!.isNotEmpty
                                 ? Text('as ${credit.character}')
                                 : null,
+                            trailing: dateAndType(show.year, 'SHOW'),
                             onTap: () => Navigator.of(context).push(
                               MaterialPageRoute(
                                 builder: (_) =>
@@ -292,9 +343,20 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                             leading: posterThumb(
                                 show.posterPath, Icons.tv_outlined),
                             title: Text(show.title),
-                            subtitle: Text(
-                              '${sorted.length} episode'
-                              '${sorted.length > 1 ? 's' : ''}',
+                            subtitle: Row(
+                              children: [
+                                Text(
+                                  [
+                                    if (show.year != null) '${show.year}',
+                                    '${sorted.length} episode'
+                                        '${sorted.length > 1 ? 's' : ''}',
+                                  ].join(' • '),
+                                  style: const TextStyle(
+                                      color: Colors.white54, fontSize: 12),
+                                ),
+                                const SizedBox(width: 8),
+                                typeTag('SHOW'),
+                              ],
                             ),
                             children: sorted.map((c) {
                               final ep = episodeById[c.episodeId]!;
@@ -417,26 +479,53 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                               ),
                             if (directingCredits.isNotEmpty) ...[
                               sectionHeader('DIRECTING'),
-                              ...directingCredits.map(movieRow),
+                              ...sortedRows(directingCredits
+                                  .map((c) => (
+                                        year: movieById[c.movieId]?.year,
+                                        row: movieRow(c),
+                                      ))
+                                  .toList()),
                             ],
                             if (writingCredits.isNotEmpty) ...[
                               sectionHeader('WRITING'),
-                              ...writingCredits.map(movieRow),
+                              ...sortedRows(writingCredits
+                                  .map((c) => (
+                                        year: movieById[c.movieId]?.year,
+                                        row: movieRow(c),
+                                      ))
+                                  .toList()),
                             ],
                             if (creatingCredits.isNotEmpty) ...[
                               sectionHeader('CREATING'),
-                              ...creatingCredits.map(showRow),
+                              ...sortedRows(creatingCredits
+                                  .map((c) => (
+                                        year: showById[c.showId]?.year,
+                                        row: showRow(c),
+                                      ))
+                                  .toList()),
                             ],
                             if (actingMovieCredits.isNotEmpty ||
                                 actingShowCredits.isNotEmpty) ...[
                               sectionHeader('ACTING'),
-                              ...actingMovieCredits.map(movieRow),
-                              ...actingShowCredits.map(showRow),
+                              ...sortedRows([
+                                ...actingMovieCredits.map((c) => (
+                                      year: movieById[c.movieId]?.year,
+                                      row: movieRow(c),
+                                    )),
+                                ...actingShowCredits.map((c) => (
+                                      year: showById[c.showId]?.year,
+                                      row: showRow(c),
+                                    )),
+                              ]),
                             ],
                             if (episodesByShow.isNotEmpty) ...[
                               sectionHeader('GUEST STARRING'),
-                              ...episodesByShow.entries
-                                  .map((e) => guestStarGroup(e.key, e.value)),
+                              ...sortedRows(episodesByShow.entries
+                                  .map((e) => (
+                                        year: showById[e.key]?.year,
+                                        row: guestStarGroup(e.key, e.value),
+                                      ))
+                                  .toList()),
                             ],
                           ],
                         );
