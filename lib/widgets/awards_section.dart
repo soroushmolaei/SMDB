@@ -95,17 +95,37 @@ class _AwardsSectionState extends ConsumerState<AwardsSection> {
         final won = awards.where((a) => a.result == 'Won').toList();
         final nominated =
             awards.where((a) => a.result != 'Won').toList();
+        final total = awards.length;
 
         return Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: EdgeInsets.zero,
+            title: Row(
+              children: [
+                const Text(
+                  'AWARDS',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.white38,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  won.isNotEmpty
+                      ? '$total total · ${won.length} won'
+                      : '$total total',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Colors.amber,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
             children: [
-              const Text(
-                'AWARDS',
-                style: TextStyle(fontSize: 12, color: Colors.white38),
-              ),
-              const SizedBox(height: 6),
               ...won.map((a) => _AwardRow(award: a, won: true)),
               ...nominated.map((a) => _AwardRow(award: a, won: false)),
             ],
