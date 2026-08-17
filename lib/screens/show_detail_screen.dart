@@ -81,6 +81,7 @@ class ShowDetailScreen extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: _ShowHero(
                       title: show.title,
+                      originalTitle: show.originalTitle,
                       contentRating: show.contentRating,
                       status: show.status,
                       rating: show.rating,
@@ -385,6 +386,7 @@ class ShowDetailScreen extends ConsumerWidget {
 /// backdrop needs light text for legibility either way.
 class _ShowHero extends StatelessWidget {
   final String title;
+  final String? originalTitle;
   final String? contentRating;
   final String? status;
   final double? rating;
@@ -400,6 +402,7 @@ class _ShowHero extends StatelessWidget {
 
   const _ShowHero({
     required this.title,
+    required this.originalTitle,
     required this.contentRating,
     required this.status,
     required this.rating,
@@ -476,6 +479,25 @@ class _ShowHero extends StatelessWidget {
                           height: 1.15,
                         ),
                       ),
+                      if (originalTitle != null &&
+                          originalTitle!.isNotEmpty &&
+                          originalTitle != title)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            originalTitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
                       if (contentRating != null ||
                           genres != null ||
                           status != null)

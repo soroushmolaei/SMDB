@@ -69,6 +69,7 @@ class MovieDetailScreen extends ConsumerWidget {
                   SliverToBoxAdapter(
                     child: _MovieHero(
                       title: movie.title,
+                      originalTitle: movie.originalTitle,
                       year: movie.year,
                       contentRating: movie.contentRating,
                       runtimeMinutes: movie.runtimeMinutes,
@@ -367,6 +368,7 @@ class MovieDetailScreen extends ConsumerWidget {
 /// backdrop needs light text for legibility either way.
 class _MovieHero extends StatelessWidget {
   final String title;
+  final String? originalTitle;
   final int? year;
   final String? contentRating;
   final int? runtimeMinutes;
@@ -386,6 +388,7 @@ class _MovieHero extends StatelessWidget {
 
   const _MovieHero({
     required this.title,
+    required this.originalTitle,
     required this.year,
     required this.contentRating,
     required this.runtimeMinutes,
@@ -478,6 +481,25 @@ class _MovieHero extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (originalTitle != null &&
+                          originalTitle!.isNotEmpty &&
+                          originalTitle != title)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            originalTitle!,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontStyle: FontStyle.italic,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .primary
+                                  .withValues(alpha: 0.85),
+                            ),
+                          ),
+                        ),
                       if (contentRating != null ||
                           genres != null ||
                           runtimeMinutes != null)

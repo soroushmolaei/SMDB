@@ -286,6 +286,7 @@ class ScanState {
 class _MovieMatch {
   final int? tmdbId;
   final String? imdbId;
+  final String? originalTitle;
   final String? overview;
   final String? posterPath;
   final String? backdropPath;
@@ -302,6 +303,7 @@ class _MovieMatch {
   _MovieMatch({
     this.tmdbId,
     this.imdbId,
+    this.originalTitle,
     this.overview,
     this.posterPath,
     this.backdropPath,
@@ -320,6 +322,7 @@ class _MovieMatch {
 class _ShowMatch {
   final int? tmdbId;
   final String? imdbId;
+  final String? originalTitle;
   final String? overview;
   final String? posterPath;
   final String? backdropPath;
@@ -334,6 +337,7 @@ class _ShowMatch {
   _ShowMatch({
     this.tmdbId,
     this.imdbId,
+    this.originalTitle,
     this.overview,
     this.posterPath,
     this.backdropPath,
@@ -616,6 +620,7 @@ class ScanController extends StateNotifier<ScanState> {
             trailerFilePath: Value(item.trailerFilePath),
             tmdbId: Value(match.tmdbId),
             imdbId: Value(match.imdbId),
+            originalTitle: Value(match.originalTitle),
             overview: Value(match.overview),
             posterPath: Value(match.posterPath),
             backdropPath: Value(match.backdropPath),
@@ -682,6 +687,7 @@ class ScanController extends StateNotifier<ScanState> {
 
     int? tmdbId;
     String? backdropPath;
+    String? originalTitle;
     var contentRating = OmdbService.cleanText(data['Rated'] as String?);
 
     // Supplementary: OMDb has no backdrop image and its basic response only
@@ -699,6 +705,7 @@ class ScanController extends StateNotifier<ScanState> {
             tmdbDetails['backdrop_path'] as String?,
             size: 'w1280',
           );
+          originalTitle = tmdbDetails['original_title'] as String?;
           final extracted = _extractTmdbCredits(
             tmdbDetails['credits'] as Map<String, dynamic>?,
           );
@@ -719,6 +726,7 @@ class ScanController extends StateNotifier<ScanState> {
     return _MovieMatch(
       tmdbId: tmdbId,
       imdbId: data['imdbID'] as String?,
+      originalTitle: originalTitle,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
       backdropPath: backdropPath,
@@ -803,6 +811,7 @@ class ScanController extends StateNotifier<ScanState> {
     return _MovieMatch(
       tmdbId: tmdbId,
       imdbId: details['imdb_id'] as String?,
+      originalTitle: details['original_title'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
       backdropPath: TmdbService.imageUrl(
@@ -970,6 +979,7 @@ class ScanController extends StateNotifier<ScanState> {
             folderPath: show.folderPath,
             tmdbId: Value(match.tmdbId),
             imdbId: Value(match.imdbId),
+            originalTitle: Value(match.originalTitle),
             overview: Value(match.overview),
             posterPath: Value(match.posterPath),
             backdropPath: Value(match.backdropPath),
@@ -1050,6 +1060,7 @@ class ScanController extends StateNotifier<ScanState> {
 
     int? tmdbId;
     String? backdropPath;
+    String? originalTitle;
     var contentRating = OmdbService.cleanText(data['Rated'] as String?);
 
     // Supplementary: OMDb has no backdrop image and only a handful of
@@ -1066,6 +1077,7 @@ class ScanController extends StateNotifier<ScanState> {
             tmdbDetails['backdrop_path'] as String?,
             size: 'w1280',
           );
+          originalTitle = tmdbDetails['original_name'] as String?;
           final tmdbCredits = <MovieCreditInput>[];
           final createdBy =
               (tmdbDetails['created_by'] as List<dynamic>?) ?? [];
@@ -1116,6 +1128,7 @@ class ScanController extends StateNotifier<ScanState> {
     return _ShowMatch(
       tmdbId: tmdbId,
       imdbId: data['imdbID'] as String?,
+      originalTitle: originalTitle,
       overview: OmdbService.cleanText(data['Plot'] as String?),
       posterPath: OmdbService.posterUrl(data['Poster'] as String?),
       backdropPath: backdropPath,
@@ -1224,6 +1237,7 @@ class ScanController extends StateNotifier<ScanState> {
     return _ShowMatch(
       tmdbId: tmdbId,
       imdbId: externalIds?['imdb_id'] as String?,
+      originalTitle: details['original_name'] as String?,
       overview: details['overview'] as String?,
       posterPath: TmdbService.imageUrl(details['poster_path'] as String?),
       backdropPath: TmdbService.imageUrl(
@@ -1430,6 +1444,9 @@ class ScanController extends StateNotifier<ScanState> {
         trailerFilePath: Value(trailerPath),
         tmdbId: Value(match.tmdbId ?? movie.tmdbId),
         imdbId: Value(match.imdbId ?? movie.imdbId),
+        originalTitle: includeOtherFields
+            ? Value(match.originalTitle)
+            : const Value.absent(),
         overview:
             includeOtherFields ? Value(match.overview) : const Value.absent(),
         posterPath:
@@ -1566,6 +1583,9 @@ class ScanController extends StateNotifier<ScanState> {
         folderPath: show.folderPath,
         tmdbId: Value(match.tmdbId ?? show.tmdbId),
         imdbId: Value(match.imdbId ?? show.imdbId),
+        originalTitle: includeOtherFields
+            ? Value(match.originalTitle)
+            : const Value.absent(),
         overview:
             includeOtherFields ? Value(match.overview) : const Value.absent(),
         posterPath:
