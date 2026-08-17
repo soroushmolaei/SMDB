@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'global_search_box.dart';
+
 /// Replaces the native Windows title bar (hidden via WindowOptions in
 /// main.dart) with a slim, dark bar that matches the rest of the app —
 /// no more bright OS chrome sitting on top of a dark UI. Left side is
@@ -68,9 +70,18 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
-                    const Spacer(),
                   ],
                 ),
+              ),
+            ),
+          ),
+          const GlobalSearchBox(),
+          Expanded(
+            child: DragToMoveArea(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onDoubleTap: _toggleMaximize,
+                child: const SizedBox.expand(),
               ),
             ),
           ),
