@@ -27,6 +27,7 @@ class _YearScreenState extends ConsumerState<YearScreen>
     with MediaSelectionMixin<YearScreen> {
   SortOption _sort = SortOption.yearNewest;
   RangeValues? _range;
+  String? _selectedKind;
 
   @override
   Widget build(BuildContext context) {
@@ -76,11 +77,18 @@ class _YearScreenState extends ConsumerState<YearScreen>
             );
 
         final dated = <MediaItem>[
-          ...movies.where((m) => m.year != null).map(toMovieItem),
-          ...shows.where((s) => s.year != null).map(toShowItem),
+          if (_selectedKind == null || _selectedKind == 'movie')
+            ...movies.where((m) => m.year != null).map(toMovieItem),
+          if (_selectedKind == null || _selectedKind == 'show')
+            ...shows.where((s) => s.year != null).map(toShowItem),
         ];
+        // Respects the kind filter too, so this stays accurate when
+        // narrowed to Movies only or Shows only rather than comparing
+        // against the unfiltered grand total.
+        final relevantMovieCount = _selectedKind == 'show' ? 0 : movies.length;
+        final relevantShowCount = _selectedKind == 'movie' ? 0 : shows.length;
         final missingYearCount =
-            movies.length + shows.length - dated.length;
+            relevantMovieCount + relevantShowCount - dated.length;
 
         if (dated.isEmpty) {
           return Center(
@@ -238,6 +246,8 @@ class _YearScreenState extends ConsumerState<YearScreen>
             SortFilterBar(
               sort: _sort,
               onSortChanged: (s) => setState(() => _sort = s),
+              selectedKind: _selectedKind,
+              onKindChanged: (k) => setState(() => _selectedKind = k),
               trailing: IconButton(
                 icon: Icon(selecting ? Icons.close : Icons.checklist),
                 tooltip: selecting ? 'Cancel selection' : 'Select multiple',

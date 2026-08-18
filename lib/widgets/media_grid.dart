@@ -82,6 +82,8 @@ class SortFilterBar extends StatelessWidget {
   final ValueChanged<int?>? onYearChanged;
   final double? minRating;
   final ValueChanged<double?>? onMinRatingChanged;
+  final String? selectedKind;
+  final ValueChanged<String?>? onKindChanged;
   final Widget? trailing;
 
   const SortFilterBar({
@@ -96,13 +98,17 @@ class SortFilterBar extends StatelessWidget {
     this.onYearChanged,
     this.minRating,
     this.onMinRatingChanged,
+    this.selectedKind,
+    this.onKindChanged,
     this.trailing,
   });
 
   @override
   Widget build(BuildContext context) {
-    final hasActiveFilters =
-        selectedGenre != null || selectedYear != null || minRating != null;
+    final hasActiveFilters = selectedGenre != null ||
+        selectedYear != null ||
+        minRating != null ||
+        selectedKind != null;
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
@@ -181,6 +187,24 @@ class SortFilterBar extends StatelessWidget {
                       onChanged: onMinRatingChanged,
                     ),
                   ],
+                  if (onKindChanged != null) ...[
+                    const SizedBox(width: 12),
+                    DropdownButton<String?>(
+                      value: selectedKind,
+                      hint:
+                          const Text('Type', style: TextStyle(fontSize: 13)),
+                      underline: const SizedBox.shrink(),
+                      items: const [
+                        DropdownMenuItem(
+                            value: null, child: Text('Movies & Shows')),
+                        DropdownMenuItem(
+                            value: 'movie', child: Text('Movies only')),
+                        DropdownMenuItem(
+                            value: 'show', child: Text('Shows only')),
+                      ],
+                      onChanged: onKindChanged,
+                    ),
+                  ],
                   if (hasActiveFilters) ...[
                     const SizedBox(width: 8),
                     TextButton(
@@ -188,6 +212,7 @@ class SortFilterBar extends StatelessWidget {
                         onGenreChanged?.call(null);
                         onYearChanged?.call(null);
                         onMinRatingChanged?.call(null);
+                        onKindChanged?.call(null);
                       },
                       child: const Text('Clear'),
                     ),

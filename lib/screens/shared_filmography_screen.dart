@@ -34,6 +34,7 @@ class _SharedFilmographyScreenState
     with MediaSelectionMixin<SharedFilmographyScreen> {
   SortOption _sort = SortOption.titleAsc;
   bool _gridView = true;
+  String? _selectedKind;
 
   String get _headerTitle {
     final names = widget.personNames;
@@ -111,50 +112,52 @@ class _SharedFilmographyScreenState
                     }
 
                     final items = <MediaItem>[
-                      ...peopleByMovie.entries
-                          .where((e) => e.value.containsAll(wanted))
-                          .map((e) => movieById[e.key]!)
-                          .map((m) => MediaItem(
-                                kind: 'movie',
-                                id: m.id,
-                                title: m.title,
-                                year: m.year,
-                                posterPath: m.posterPath,
-                                posterThumbnail: m.posterThumbnail,
-                                rating: m.rating,
-                                genres: m.genres,
-                                watched: m.watched,
-                                isFavorite: m.isFavorite,
-                                dateAdded: m.dateAdded,
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        MovieDetailScreen(movieId: m.id),
+                      if (_selectedKind == null || _selectedKind == 'movie')
+                        ...peopleByMovie.entries
+                            .where((e) => e.value.containsAll(wanted))
+                            .map((e) => movieById[e.key]!)
+                            .map((m) => MediaItem(
+                                  kind: 'movie',
+                                  id: m.id,
+                                  title: m.title,
+                                  year: m.year,
+                                  posterPath: m.posterPath,
+                                  posterThumbnail: m.posterThumbnail,
+                                  rating: m.rating,
+                                  genres: m.genres,
+                                  watched: m.watched,
+                                  isFavorite: m.isFavorite,
+                                  dateAdded: m.dateAdded,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          MovieDetailScreen(movieId: m.id),
+                                    ),
                                   ),
-                                ),
-                              )),
-                      ...peopleByShow.entries
-                          .where((e) => e.value.containsAll(wanted))
-                          .map((e) => showById[e.key]!)
-                          .map((s) => MediaItem(
-                                kind: 'show',
-                                id: s.id,
-                                title: s.title,
-                                year: null,
-                                posterPath: s.posterPath,
-                                posterThumbnail: s.posterThumbnail,
-                                rating: s.rating,
-                                genres: s.genres,
-                                watched: false,
-                                isFavorite: s.isFavorite,
-                                dateAdded: s.dateAdded,
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ShowDetailScreen(showId: s.id),
+                                )),
+                      if (_selectedKind == null || _selectedKind == 'show')
+                        ...peopleByShow.entries
+                            .where((e) => e.value.containsAll(wanted))
+                            .map((e) => showById[e.key]!)
+                            .map((s) => MediaItem(
+                                  kind: 'show',
+                                  id: s.id,
+                                  title: s.title,
+                                  year: null,
+                                  posterPath: s.posterPath,
+                                  posterThumbnail: s.posterThumbnail,
+                                  rating: s.rating,
+                                  genres: s.genres,
+                                  watched: false,
+                                  isFavorite: s.isFavorite,
+                                  dateAdded: s.dateAdded,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ShowDetailScreen(showId: s.id),
+                                    ),
                                   ),
-                                ),
-                              )),
+                                )),
                     ];
                     sortMediaItems(items, _sort);
 
@@ -173,6 +176,9 @@ class _SharedFilmographyScreenState
                         SortFilterBar(
                           sort: _sort,
                           onSortChanged: (s) => setState(() => _sort = s),
+                          selectedKind: _selectedKind,
+                          onKindChanged: (k) =>
+                              setState(() => _selectedKind = k),
                           trailing: IconButton(
                             icon: Icon(
                                 selecting ? Icons.close : Icons.checklist),

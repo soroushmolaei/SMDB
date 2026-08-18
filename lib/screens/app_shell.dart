@@ -10,6 +10,7 @@ import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
 import 'genres_list_screen.dart';
 import 'group_detail_screen.dart';
+import 'language_list_screen.dart';
 import 'movie_detail_screen.dart';
 import 'mpa_list_screen.dart';
 import 'people_tab.dart';
@@ -24,6 +25,7 @@ enum _Section {
   people,
   genres,
   mpa,
+  language,
   latestAdditions,
   favorites,
   notYetWatched,
@@ -65,6 +67,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return 'Genres';
       case _Section.mpa:
         return 'MPA';
+      case _Section.language:
+        return 'Language';
       case _Section.latestAdditions:
         return 'Latest Additions';
       case _Section.favorites:
@@ -329,6 +333,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return const GenresListScreen();
       case _Section.mpa:
         return const MpaListScreen();
+      case _Section.language:
+        return const LanguageListScreen();
       case _Section.latestAdditions:
         return _LibrarySection(
           key: const ValueKey(_Section.latestAdditions),
@@ -502,6 +508,18 @@ class _Sidebar extends StatelessWidget {
                   selected: selected == _Section.mpa,
                   onTap: () => onSelect(_Section.mpa),
                 ),
+                _NavItem(
+                  icon: Icons.language,
+                  label: 'Language',
+                  selected: selected == _Section.language,
+                  onTap: () => onSelect(_Section.language),
+                ),
+                _NavItem(
+                  icon: Icons.timeline,
+                  label: 'Year',
+                  selected: selected == _Section.year,
+                  onTap: () => onSelect(_Section.year),
+                ),
                 const SizedBox(height: 12),
                 const _SectionHeader('MY VIEWS'),
                 _NavItem(
@@ -533,12 +551,6 @@ class _Sidebar extends StatelessWidget {
                   label: 'Statistics',
                   selected: selected == _Section.statistics,
                   onTap: () => onSelect(_Section.statistics),
-                ),
-                _NavItem(
-                  icon: Icons.timeline,
-                  label: 'Year',
-                  selected: selected == _Section.year,
-                  onTap: () => onSelect(_Section.year),
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -855,6 +867,7 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
   bool _selecting = false;
   final Set<String> _selectedKeys = {};
   final Map<String, MediaItem> _selectedItems = {};
+  String? _selectedKind;
 
   void _toggleSelectionMode() {
     setState(() {
@@ -994,6 +1007,9 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
               (item.rating == null || item.rating! < widget.minRating!)) {
             return false;
           }
+          if (_selectedKind != null && item.kind != _selectedKind) {
+            return false;
+          }
           switch (widget.combinedFilter) {
             case _CombinedFilter.favorites:
               if (!item.isFavorite) return false;
@@ -1057,6 +1073,11 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
               onYearChanged: widget.onYearChanged,
               minRating: widget.minRating,
               onMinRatingChanged: widget.onMinRatingChanged,
+              selectedKind:
+                  widget.mode == _ContentMode.combined ? _selectedKind : null,
+              onKindChanged: widget.mode == _ContentMode.combined
+                  ? (k) => setState(() => _selectedKind = k)
+                  : null,
               trailing: IconButton(
                 icon: Icon(_selecting ? Icons.close : Icons.checklist),
                 tooltip: _selecting ? 'Cancel selection' : 'Select multiple',

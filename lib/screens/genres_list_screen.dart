@@ -202,6 +202,7 @@ class GenreDetailScreen extends ConsumerStatefulWidget {
 class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
     with MediaSelectionMixin<GenreDetailScreen> {
   SortOption _sort = SortOption.titleAsc;
+  String? _selectedKind;
 
   @override
   Widget build(BuildContext context) {
@@ -221,42 +222,48 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
           }
 
           final items = <MediaItem>[
-            ...movies.where((m) => hasAllGenres(m.genres)).map((m) => MediaItem(
-                  kind: 'movie',
-                  id: m.id,
-                  title: m.title,
-                  year: m.year,
-                  posterPath: m.posterPath,
-                  posterThumbnail: m.posterThumbnail,
-                  rating: m.rating,
-                  genres: m.genres,
-                  watched: m.watched,
-                  isFavorite: m.isFavorite,
-                  dateAdded: m.dateAdded,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => MovieDetailScreen(movieId: m.id),
-                    ),
-                  ),
-                )),
-            ...shows.where((s) => hasAllGenres(s.genres)).map((s) => MediaItem(
-                  kind: 'show',
-                  id: s.id,
-                  title: s.title,
-                  year: null,
-                  posterPath: s.posterPath,
-                  posterThumbnail: s.posterThumbnail,
-                  rating: s.rating,
-                  genres: s.genres,
-                  watched: false,
-                  isFavorite: s.isFavorite,
-                  dateAdded: s.dateAdded,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => ShowDetailScreen(showId: s.id),
-                    ),
-                  ),
-                )),
+            if (_selectedKind == null || _selectedKind == 'movie')
+              ...movies
+                  .where((m) => hasAllGenres(m.genres))
+                  .map((m) => MediaItem(
+                        kind: 'movie',
+                        id: m.id,
+                        title: m.title,
+                        year: m.year,
+                        posterPath: m.posterPath,
+                        posterThumbnail: m.posterThumbnail,
+                        rating: m.rating,
+                        genres: m.genres,
+                        watched: m.watched,
+                        isFavorite: m.isFavorite,
+                        dateAdded: m.dateAdded,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MovieDetailScreen(movieId: m.id),
+                          ),
+                        ),
+                      )),
+            if (_selectedKind == null || _selectedKind == 'show')
+              ...shows
+                  .where((s) => hasAllGenres(s.genres))
+                  .map((s) => MediaItem(
+                        kind: 'show',
+                        id: s.id,
+                        title: s.title,
+                        year: null,
+                        posterPath: s.posterPath,
+                        posterThumbnail: s.posterThumbnail,
+                        rating: s.rating,
+                        genres: s.genres,
+                        watched: false,
+                        isFavorite: s.isFavorite,
+                        dateAdded: s.dateAdded,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => ShowDetailScreen(showId: s.id),
+                          ),
+                        ),
+                      )),
           ];
           sortMediaItems(items, _sort);
 
@@ -275,6 +282,8 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
               SortFilterBar(
                 sort: _sort,
                 onSortChanged: (s) => setState(() => _sort = s),
+                selectedKind: _selectedKind,
+                onKindChanged: (k) => setState(() => _selectedKind = k),
                 trailing: IconButton(
                   icon: Icon(selecting ? Icons.close : Icons.checklist),
                   tooltip: selecting ? 'Cancel selection' : 'Select multiple',

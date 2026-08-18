@@ -7,8 +7,11 @@ import '../widgets/media_item.dart';
 import 'movie_detail_screen.dart';
 import 'show_detail_screen.dart';
 
-class MpaListScreen extends ConsumerWidget {
-  const MpaListScreen({super.key});
+/// Top-level "MY COLLECTION > Language" screen: one tile per distinct
+/// `originalLanguage` value (shared by movies and shows), with a count,
+/// linking to [LanguageMoviesScreen].
+class LanguageListScreen extends ConsumerWidget {
+  const LanguageListScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -19,21 +22,23 @@ class MpaListScreen extends ConsumerWidget {
       data: (movies) {
         final counts = <String, int>{};
         for (final m in movies) {
-          final rating = m.contentRating;
-          if (rating == null || rating.isEmpty) continue;
-          counts[rating] = (counts[rating] ?? 0) + 1;
+          final lang = m.originalLanguage;
+          if (lang == null || lang.isEmpty) continue;
+          counts[lang] = (counts[lang] ?? 0) + 1;
         }
         for (final s in shows) {
-          final rating = s.contentRating;
-          if (rating == null || rating.isEmpty) continue;
-          counts[rating] = (counts[rating] ?? 0) + 1;
+          final lang = s.originalLanguage;
+          if (lang == null || lang.isEmpty) continue;
+          counts[lang] = (counts[lang] ?? 0) + 1;
         }
-        final ratings = counts.keys.toList()..sort();
+        final languages = counts.keys.toList()..sort();
 
-        if (ratings.isEmpty) {
+        if (languages.isEmpty) {
           return const Center(
             child: Text(
-              'No content ratings yet — scan a movie or show folder first.',
+              'No languages yet — scan a movie or show folder first, or '
+              'tap Update on existing titles to fill this in.',
+              textAlign: TextAlign.center,
               style: TextStyle(color: Colors.white54),
             ),
           );
@@ -47,15 +52,16 @@ class MpaListScreen extends ConsumerWidget {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemCount: ratings.length,
+          itemCount: languages.length,
           itemBuilder: (context, index) {
-            final rating = ratings[index];
+            final language = languages[index];
             return Card(
               color: Colors.white.withValues(alpha: 0.05),
               child: InkWell(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => MpaMoviesScreen(rating: rating),
+                    builder: (_) =>
+                        LanguageMoviesScreen(language: language),
                   ),
                 ),
                 child: Padding(
@@ -63,17 +69,16 @@ class MpaListScreen extends ConsumerWidget {
                       horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.shield_outlined,
-                          color: Color(0xFF9C91F5)),
+                      const Icon(Icons.language, color: Color(0xFF9C91F5)),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          rating,
+                          language,
                           style: const TextStyle(fontWeight: FontWeight.w500),
                         ),
                       ),
                       Text(
-                        '${counts[rating]}',
+                        '${counts[language]}',
                         style: const TextStyle(color: Colors.white54),
                       ),
                     ],
@@ -90,16 +95,20 @@ class MpaListScreen extends ConsumerWidget {
   }
 }
 
-class MpaMoviesScreen extends ConsumerStatefulWidget {
-  final String rating;
-  const MpaMoviesScreen({super.key, required this.rating});
+/// Drill-down for a single original language: every movie/show that
+/// matches, with the same sort/filter/multi-select/bulk-refresh treatment
+/// as the other MY COLLECTION drill-downs.
+class LanguageMoviesScreen extends ConsumerStatefulWidget {
+  final String language;
+  const LanguageMoviesScreen({super.key, required this.language});
 
   @override
-  ConsumerState<MpaMoviesScreen> createState() => _MpaMoviesScreenState();
+  ConsumerState<LanguageMoviesScreen> createState() =>
+      _LanguageMoviesScreenState();
 }
 
-class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
-    with MediaSelectionMixin<MpaMoviesScreen> {
+class _LanguageMoviesScreenState extends ConsumerState<LanguageMoviesScreen>
+    with MediaSelectionMixin<LanguageMoviesScreen> {
   SortOption _sort = SortOption.titleAsc;
   String? _selectedKind;
 
@@ -111,13 +120,13 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
     return Scaffold(
-      appBar: AppBar(title: Text(widget.rating)),
+      appBar: AppBar(title: Text(widget.language)),
       body: moviesAsync.when(
         data: (movies) {
           final items = <MediaItem>[
             if (_selectedKind == null || _selectedKind == 'movie')
               ...movies
-                  .where((m) => m.contentRating == widget.rating)
+                  .where((m) => m.originalLanguage == widget.language)
                   .map((m) => MediaItem(
                         kind: 'movie',
                         id: m.id,
@@ -138,12 +147,12 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                       )),
             if (_selectedKind == null || _selectedKind == 'show')
               ...shows
-                  .where((s) => s.contentRating == widget.rating)
+                  .where((s) => s.originalLanguage == widget.language)
                   .map((s) => MediaItem(
                         kind: 'show',
                         id: s.id,
                         title: s.title,
-                        year: null,
+                        year: s.year,
                         posterPath: s.posterPath,
                         posterThumbnail: s.posterThumbnail,
                         rating: s.rating,
@@ -188,7 +197,7 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                 child: MediaItemView(
                   items: items,
                   gridView: true,
-                  emptyTitle: 'No movies or shows with this rating',
+                  emptyTitle: 'No movies or shows in this language',
                   selectionMode: selecting,
                   selectedKeys: selectedKeys,
                   onToggleSelect: toggleItemSelection,

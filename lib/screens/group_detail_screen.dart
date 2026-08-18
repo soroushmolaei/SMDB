@@ -18,6 +18,7 @@ class GroupDetailScreen extends ConsumerStatefulWidget {
 class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
     with MediaSelectionMixin<GroupDetailScreen> {
   SortOption _sort = SortOption.titleAsc;
+  String? _selectedKind;
 
   Future<void> _rename(String currentName) async {
     final controller = TextEditingController(text: currentName);
@@ -117,48 +118,50 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                         showLinks.map((l) => l.showId).toSet();
 
                     final items = <MediaItem>[
-                      ...movies
-                          .where((m) => movieIds.contains(m.id))
-                          .map((m) => MediaItem(
-                                kind: 'movie',
-                                id: m.id,
-                                title: m.title,
-                                year: m.year,
-                                posterPath: m.posterPath,
-                                posterThumbnail: m.posterThumbnail,
-                                rating: m.rating,
-                                genres: m.genres,
-                                watched: m.watched,
-                                isFavorite: m.isFavorite,
-                                dateAdded: m.dateAdded,
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        MovieDetailScreen(movieId: m.id),
+                      if (_selectedKind == null || _selectedKind == 'movie')
+                        ...movies
+                            .where((m) => movieIds.contains(m.id))
+                            .map((m) => MediaItem(
+                                  kind: 'movie',
+                                  id: m.id,
+                                  title: m.title,
+                                  year: m.year,
+                                  posterPath: m.posterPath,
+                                  posterThumbnail: m.posterThumbnail,
+                                  rating: m.rating,
+                                  genres: m.genres,
+                                  watched: m.watched,
+                                  isFavorite: m.isFavorite,
+                                  dateAdded: m.dateAdded,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          MovieDetailScreen(movieId: m.id),
+                                    ),
                                   ),
-                                ),
-                              )),
-                      ...shows
-                          .where((s) => showIds.contains(s.id))
-                          .map((s) => MediaItem(
-                                kind: 'show',
-                                id: s.id,
-                                title: s.title,
-                                year: null,
-                                posterPath: s.posterPath,
-                                posterThumbnail: s.posterThumbnail,
-                                rating: s.rating,
-                                genres: s.genres,
-                                watched: false,
-                                isFavorite: s.isFavorite,
-                                dateAdded: s.dateAdded,
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) =>
-                                        ShowDetailScreen(showId: s.id),
+                                )),
+                      if (_selectedKind == null || _selectedKind == 'show')
+                        ...shows
+                            .where((s) => showIds.contains(s.id))
+                            .map((s) => MediaItem(
+                                  kind: 'show',
+                                  id: s.id,
+                                  title: s.title,
+                                  year: null,
+                                  posterPath: s.posterPath,
+                                  posterThumbnail: s.posterThumbnail,
+                                  rating: s.rating,
+                                  genres: s.genres,
+                                  watched: false,
+                                  isFavorite: s.isFavorite,
+                                  dateAdded: s.dateAdded,
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) =>
+                                          ShowDetailScreen(showId: s.id),
+                                    ),
                                   ),
-                                ),
-                              )),
+                                )),
                     ];
                     sortMediaItems(items, _sort);
 
@@ -177,6 +180,9 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                         SortFilterBar(
                           sort: _sort,
                           onSortChanged: (s) => setState(() => _sort = s),
+                          selectedKind: _selectedKind,
+                          onKindChanged: (k) =>
+                              setState(() => _selectedKind = k),
                           trailing: IconButton(
                             icon: Icon(selecting
                                 ? Icons.close
