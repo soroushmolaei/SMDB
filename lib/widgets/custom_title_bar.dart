@@ -53,10 +53,10 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
               child: GestureDetector(
                 behavior: HitTestBehavior.translucent,
                 onDoubleTap: _toggleMaximize,
-                child: Row(
+                child: const Row(
                   children: [
-                    const SizedBox(width: 12),
-                    const Text(
+                    SizedBox(width: 12),
+                    Text(
                       'SMDB',
                       style: TextStyle(
                         color: Colors.white70,

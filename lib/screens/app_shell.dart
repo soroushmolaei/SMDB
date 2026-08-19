@@ -47,7 +47,7 @@ class AppShell extends ConsumerStatefulWidget {
 
 class _AppShellState extends ConsumerState<AppShell> {
   _Section _section = _Section.movies;
-  String _query = '';
+  final String _query = '';
   bool _gridView = true;
   String? _letterFilter;
   SortOption _sort = SortOption.titleAsc;
