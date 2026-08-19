@@ -56,12 +56,6 @@ class _CustomTitleBarState extends State<CustomTitleBar> with WindowListener {
                 child: Row(
                   children: [
                     const SizedBox(width: 12),
-                    Image.asset(
-                      'assets/icon/app_icon.png',
-                      width: 16,
-                      height: 16,
-                    ),
-                    const SizedBox(width: 8),
                     const Text(
                       'SMDB',
                       style: TextStyle(

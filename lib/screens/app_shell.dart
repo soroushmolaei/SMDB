@@ -243,8 +243,6 @@ class _AppShellState extends ConsumerState<AppShell> {
                   onToggleView: () => setState(() => _gridView = !_gridView),
                   onAddMovies: () => _addAndScanFolder('movie'),
                   onAddShows: () => _addAndScanFolder('show'),
-                  onSearchChanged: (v) =>
-                      setState(() => _query = v.toLowerCase()),
                 ),
                 if (!omdbConfigured && !tmdbConfigured)
                   _Banner(
@@ -454,17 +452,10 @@ class _Sidebar extends StatelessWidget {
               children: [
                 Image.asset(
                   'assets/icon/app_icon.png',
-                  width: 24,
-                  height: 24,
+                  width: 36,
+                  height: 36,
                 ),
-                const SizedBox(width: 8),
-                const Expanded(
-                  child: Text(
-                    'SMDB',
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
-                  ),
-                ),
+                const Spacer(),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined, size: 18),
                   tooltip: 'Settings',
@@ -684,7 +675,6 @@ class _Toolbar extends StatelessWidget {
   final VoidCallback onToggleView;
   final VoidCallback onAddMovies;
   final VoidCallback onAddShows;
-  final ValueChanged<String> onSearchChanged;
 
   const _Toolbar({
     required this.title,
@@ -693,7 +683,6 @@ class _Toolbar extends StatelessWidget {
     required this.onToggleView,
     required this.onAddMovies,
     required this.onAddShows,
-    required this.onSearchChanged,
   });
 
   @override
@@ -724,20 +713,6 @@ class _Toolbar extends StatelessWidget {
             ),
             const SizedBox(width: 12),
           ],
-          SizedBox(
-            width: 220,
-            height: 36,
-            child: TextField(
-              onChanged: onSearchChanged,
-              decoration: const InputDecoration(
-                isDense: true,
-                prefixIcon: Icon(Icons.search, size: 18),
-                hintText: 'Search...',
-                border: OutlineInputBorder(),
-              ),
-            ),
-          ),
-          const SizedBox(width: 8),
           IconButton(
             icon: Icon(gridView ? Icons.view_list_outlined : Icons.grid_view),
             tooltip: gridView ? 'List view' : 'Grid view',
