@@ -25,32 +25,30 @@ class _GlobalSearchBoxState extends ConsumerState<GlobalSearchBox> {
   final _focusNode = FocusNode();
   final _layerLink = LayerLink();
   final _overlayController = OverlayPortalController();
+  // Shared identity so the search box and its dropdown are treated as one
+  // region: a tap on either doesn't count as "outside" the other.
+  final Object _groupId = Object();
   String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _focusNode.addListener(_syncOverlay);
     _controller.addListener(() {
-      setState(() => _query = _controller.text.trim());
-      _syncOverlay();
+      final query = _controller.text.trim();
+      setState(() => _query = query);
+      if (query.isEmpty) {
+        _overlayController.hide();
+      } else {
+        _overlayController.show();
+      }
     });
   }
 
   @override
   void dispose() {
-    _focusNode.removeListener(_syncOverlay);
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
-  }
-
-  void _syncOverlay() {
-    if (_focusNode.hasFocus && _query.isNotEmpty) {
-      _overlayController.show();
-    } else {
-      _overlayController.hide();
-    }
   }
 
   void _closeAndClear() {
@@ -70,61 +68,72 @@ class _GlobalSearchBoxState extends ConsumerState<GlobalSearchBox> {
 
   @override
   Widget build(BuildContext context) {
-    return OverlayPortal(
-      controller: _overlayController,
-      overlayChildBuilder: (context) => Positioned(
-        width: 340,
-        child: CompositedTransformFollower(
-          link: _layerLink,
-          showWhenUnlinked: false,
-          targetAnchor: Alignment.bottomLeft,
-          offset: const Offset(-10, 6),
-          child: _SearchDropdown(
-            query: _query,
-            onSelect: _closeAndClear,
-            onSeeAll: () => _openSeeAll(_query),
+    return TapRegion(
+      groupId: _groupId,
+      onTapOutside: (event) => _overlayController.hide(),
+      child: OverlayPortal(
+        controller: _overlayController,
+        overlayChildBuilder: (context) => Positioned(
+          width: 340,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            targetAnchor: Alignment.bottomLeft,
+            offset: const Offset(-10, 6),
+            child: TapRegion(
+              groupId: _groupId,
+              child: _SearchDropdown(
+                query: _query,
+                onSelect: _closeAndClear,
+                onSeeAll: () => _openSeeAll(_query),
+              ),
+            ),
           ),
         ),
-      ),
-      child: CompositedTransformTarget(
-        link: _layerLink,
-        child: Container(
-          width: 300,
-          height: 24,
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.08),
-            borderRadius: BorderRadius.circular(4),
-          ),
-          child: TextField(
-            controller: _controller,
-            focusNode: _focusNode,
-            style: const TextStyle(color: Colors.white, fontSize: 12),
-            textAlignVertical: TextAlignVertical.center,
-            decoration: InputDecoration(
-              isDense: true,
-              border: InputBorder.none,
-              contentPadding: const EdgeInsets.symmetric(horizontal: 6),
-              prefixIcon:
-                  const Icon(Icons.search, size: 14, color: Colors.white54),
-              prefixIconConstraints:
-                  const BoxConstraints(minWidth: 26, minHeight: 24),
-              hintText: 'Search movies, shows, people',
-              hintStyle: const TextStyle(color: Colors.white38, fontSize: 12),
-              suffixIcon: _query.isEmpty
-                  ? null
-                  : IconButton(
-                      icon: const Icon(Icons.close,
-                          size: 12, color: Colors.white54),
-                      onPressed: () {
-                        _controller.clear();
-                        _focusNode.requestFocus();
-                      },
-                      constraints:
-                          const BoxConstraints(minWidth: 24, minHeight: 24),
-                      padding: EdgeInsets.zero,
-                    ),
+        child: CompositedTransformTarget(
+          link: _layerLink,
+          child: Container(
+            width: 300,
+            height: 24,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(4),
             ),
-            onSubmitted: (value) => _openSeeAll(value.trim()),
+            child: TextField(
+              controller: _controller,
+              focusNode: _focusNode,
+              onTap: () {
+                if (_query.isNotEmpty) _overlayController.show();
+              },
+              style: const TextStyle(color: Colors.white, fontSize: 12),
+              textAlignVertical: TextAlignVertical.center,
+              decoration: InputDecoration(
+                isDense: true,
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(horizontal: 6),
+                prefixIcon: const Icon(Icons.search,
+                    size: 14, color: Colors.white54),
+                prefixIconConstraints:
+                    const BoxConstraints(minWidth: 26, minHeight: 24),
+                hintText: 'Search movies, shows, people',
+                hintStyle:
+                    const TextStyle(color: Colors.white38, fontSize: 12),
+                suffixIcon: _query.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close,
+                            size: 12, color: Colors.white54),
+                        onPressed: () {
+                          _controller.clear();
+                          _focusNode.requestFocus();
+                        },
+                        constraints:
+                            const BoxConstraints(minWidth: 24, minHeight: 24),
+                        padding: EdgeInsets.zero,
+                      ),
+              ),
+              onSubmitted: (value) => _openSeeAll(value.trim()),
+            ),
           ),
         ),
       ),
