@@ -183,6 +183,7 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
 
                             final roleByPerson = <int, Set<String>>{};
                             final countByPerson = <int, int>{};
+                            final guestStarShowsByPerson = <int, Set<int>>{};
                             void bump(int personId, String role) {
                               roleByPerson
                                   .putIfAbsent(personId, () => {})
@@ -205,7 +206,25 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                                   !showIds.contains(showId)) {
                                 continue;
                               }
-                              bump(c.personId, 'guest_star');
+                              guestStarShowsByPerson
+                                  .putIfAbsent(c.personId, () => {})
+                                  .add(showId);
+                            }
+                            // The filmography page groups guest-starring
+                            // by show (one tile per show, with an episode
+                            // count inside it), so match that here too:
+                            // count distinct shows, not episodes, or
+                            // someone who guest-starred in many episodes
+                            // of one show would look far more prolific
+                            // than the filmography page shows them to be.
+                            for (final entry
+                                in guestStarShowsByPerson.entries) {
+                              roleByPerson
+                                  .putIfAbsent(entry.key, () => {})
+                                  .add('guest_star');
+                              countByPerson[entry.key] =
+                                  (countByPerson[entry.key] ?? 0) +
+                                      entry.value.length;
                             }
 
                             switch (_sort) {
