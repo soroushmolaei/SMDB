@@ -452,8 +452,8 @@ class _Sidebar extends StatelessWidget {
               children: [
                 Image.asset(
                   'assets/icon/app_icon.png',
-                  width: 36,
-                  height: 36,
+                  width: 72,
+                  height: 72,
                 ),
                 const Spacer(),
                 IconButton(

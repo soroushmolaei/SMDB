@@ -8,6 +8,7 @@ import 'package:path/path.dart' as p;
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../services/app_config_service.dart';
+import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
@@ -449,10 +450,29 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
+  Future<void> _addExclusion() async {
+    final result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Choose file(s) to exclude',
+      type: FileType.custom,
+      allowedExtensions:
+          videoExtensions.map((ext) => ext.replaceFirst('.', '')).toList(),
+      allowMultiple: true,
+    );
+    final paths =
+        result?.files.map((f) => f.path).whereType<String>().toList();
+    if (paths == null || paths.isEmpty) return;
+
+    final db = ref.read(databaseProvider);
+    for (final path in paths) {
+      await db.addExclusion(path);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(appSettingsProvider);
     final foldersAsync = ref.watch(foldersStreamProvider);
+    final exclusionsAsync = ref.watch(exclusionsStreamProvider);
     final dbPathAsync = ref.watch(databasePathProvider);
     final thumbnailBackfill = ref.watch(thumbnailBackfillProvider);
     final originalImageDownload = ref.watch(originalImageDownloadProvider);
@@ -477,6 +497,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             thumbnailBackfill,
             originalImageDownload,
             foldersAsync,
+            exclusionsAsync,
             scanState,
             isScanning,
           );
@@ -495,6 +516,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     ThumbnailBackfillState thumbnailBackfill,
     OriginalImageDownloadState originalImageDownload,
     AsyncValue<List<LibraryFolder>> foldersAsync,
+    AsyncValue<List<Exclusion>> exclusionsAsync,
     ScanState scanState,
     bool isScanning,
   ) {
@@ -506,7 +528,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       _SettingsCategory.storage:
           _storageSection(thumbnailBackfill, originalImageDownload),
       _SettingsCategory.library:
-          _librarySection(foldersAsync, scanState, isScanning),
+          _librarySection(foldersAsync, exclusionsAsync, scanState, isScanning),
     };
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1013,6 +1035,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   List<Widget> _librarySection(
     AsyncValue<List<LibraryFolder>> foldersAsync,
+    AsyncValue<List<Exclusion>> exclusionsAsync,
     ScanState scanState,
     bool isScanning,
   ) {
@@ -1102,6 +1125,53 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                                         .removeFolder(f.id),
                                   ),
                                 ],
+                              ),
+                            ))
+                        .toList(),
+                  );
+                },
+                loading: () => const CircularProgressIndicator(),
+                error: (e, st) => Text('Error: $e'),
+              ),
+              const SizedBox(height: 28),
+              const Text(
+                'Exclusions',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                "Files added here are skipped by every scan and rescan -- "
+                'use this for samples, extras, or anything else in a '
+                "library folder that shouldn't become its own entry.",
+                style: TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _addExclusion,
+                icon: const Icon(Icons.block, size: 16),
+                label: const Text('Add File'),
+              ),
+              const SizedBox(height: 8),
+              exclusionsAsync.when(
+                data: (excluded) {
+                  if (excluded.isEmpty) {
+                    return const Text(
+                      'No exclusions yet.',
+                      style: TextStyle(color: Colors.white54),
+                    );
+                  }
+                  return Column(
+                    children: excluded
+                        .map((e) => ListTile(
+                              contentPadding: EdgeInsets.zero,
+                              leading: const Icon(Icons.block_outlined),
+                              title: Text(e.filePath),
+                              trailing: IconButton(
+                                icon: const Icon(Icons.delete_outline),
+                                tooltip: 'Remove exclusion',
+                                onPressed: () => ref
+                                    .read(databaseProvider)
+                                    .removeExclusion(e.id),
                               ),
                             ))
                         .toList(),

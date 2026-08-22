@@ -23,6 +23,19 @@ class LibraryFolders extends Table {
   DateTimeColumn get lastScanned => dateTime().nullable()();
 }
 
+/// A file path the person never wants picked up during a folder scan --
+/// e.g. a sample clip or extra that would otherwise get added as its own
+/// movie. Checked against every candidate file found in a scanned
+/// folder; matching files are skipped entirely, as if they weren't
+/// there.
+@DataClassName('Exclusion')
+class Exclusions extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get filePath => text().unique()();
+  DateTimeColumn get addedDate =>
+      dateTime().withDefault(currentDateAndTime)();
+}
+
 @DataClassName('Movie')
 class Movies extends Table {
   IntColumn get id => integer().autoIncrement()();
@@ -229,6 +242,7 @@ class AwardInput {
 @DriftDatabase(
   tables: [
     LibraryFolders,
+    Exclusions,
     Movies,
     Shows,
     Episodes,
@@ -248,7 +262,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase() : super(_openConnection());
 
   @override
-  int get schemaVersion => 15;
+  int get schemaVersion => 16;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -346,6 +360,9 @@ class AppDatabase extends _$AppDatabase {
           if (from < 15) {
             await m.addColumn(shows, shows.year);
           }
+          if (from < 16) {
+            await m.createTable(exclusions);
+          }
         },
       );
 
@@ -366,6 +383,19 @@ class AppDatabase extends _$AppDatabase {
       (update(libraryFolders)..where((f) => f.id.equals(id))).write(
         LibraryFoldersCompanion(lastScanned: Value(DateTime.now())),
       );
+
+  // --- Exclusions ------------------------------------------------------------
+
+  Stream<List<Exclusion>> watchAllExclusions() =>
+      select(exclusions).watch();
+
+  Future<List<Exclusion>> getAllExclusions() => select(exclusions).get();
+
+  Future<void> addExclusion(String filePath) => into(exclusions)
+      .insertOnConflictUpdate(ExclusionsCompanion.insert(filePath: filePath));
+
+  Future<void> removeExclusion(int id) =>
+      (delete(exclusions)..where((e) => e.id.equals(id))).go();
 
   // --- Movies ----------------------------------------------------------------
 

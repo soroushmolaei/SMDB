@@ -39,6 +39,10 @@ final foldersStreamProvider = StreamProvider<List<LibraryFolder>>((ref) {
   return ref.watch(databaseProvider).watchAllFolders();
 });
 
+final exclusionsStreamProvider = StreamProvider<List<Exclusion>>((ref) {
+  return ref.watch(databaseProvider).watchAllExclusions();
+});
+
 final peopleStreamProvider = StreamProvider<List<Person>>((ref) {
   return ref.watch(databaseProvider).watchAllPeople();
 });
@@ -506,7 +510,10 @@ class ScanController extends StateNotifier<ScanState> {
     _tmdbConsecutiveFailures = 0;
     state = const ScanState(status: ScanStatus.scanning);
 
-    final items = await LibraryScanner.scanMovies(path);
+    final excludedPaths =
+        (await db.getAllExclusions()).map((e) => e.filePath).toSet();
+    final items =
+        await LibraryScanner.scanMovies(path, excludedPaths: excludedPaths);
     state = state.copyWith(
       status: ScanStatus.matching,
       total: items.length,
@@ -885,7 +892,10 @@ class ScanController extends StateNotifier<ScanState> {
     _tmdbConsecutiveFailures = 0;
     state = const ScanState(status: ScanStatus.scanning);
 
-    final shows = await LibraryScanner.scanShows(path);
+    final excludedPaths =
+        (await db.getAllExclusions()).map((e) => e.filePath).toSet();
+    final shows =
+        await LibraryScanner.scanShows(path, excludedPaths: excludedPaths);
     final knownEpisodePaths =
         (await db.getAllEpisodesOnce()).map((e) => e.filePath).toSet();
 

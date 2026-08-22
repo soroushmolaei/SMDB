@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-const Set<String> _videoExtensions = {
+const Set<String> videoExtensions = {
   '.mp4',
   '.mkv',
   '.avi',
@@ -15,7 +15,7 @@ const Set<String> _videoExtensions = {
 };
 
 bool isVideoFile(String path) {
-  return _videoExtensions.contains(p.extension(path).toLowerCase());
+  return videoExtensions.contains(p.extension(path).toLowerCase());
 }
 
 // ---------------------------------------------------------------------------
@@ -173,7 +173,10 @@ class LibraryScanner {
   /// the files happen to be organized into subfolders (one folder per
   /// movie, movies grouped by genre, loose files, or anything else)
   /// doesn't matter.
-  static Future<List<ScannedMovie>> scanMovies(String rootPath) async {
+  static Future<List<ScannedMovie>> scanMovies(
+    String rootPath, {
+    Set<String> excludedPaths = const {},
+  }) async {
     final root = Directory(rootPath);
     if (!await root.exists()) return [];
 
@@ -185,6 +188,7 @@ class LibraryScanner {
     await for (final entity
         in root.list(recursive: true, followLinks: false)) {
       if (entity is! File || !isVideoFile(entity.path)) continue;
+      if (excludedPaths.contains(entity.path)) continue;
       final nameNoExt = p.basenameWithoutExtension(entity.path);
       if (_looksLikeTrailer(nameNoExt)) continue;
 
@@ -217,7 +221,10 @@ class LibraryScanner {
   /// subfolders (one folder per season, everything loose, or anything
   /// else). A file whose name has no recognizable season/episode marker
   /// is skipped rather than guessed at.
-  static Future<List<ScannedShow>> scanShows(String rootPath) async {
+  static Future<List<ScannedShow>> scanShows(
+    String rootPath, {
+    Set<String> excludedPaths = const {},
+  }) async {
     final root = Directory(rootPath);
     if (!await root.exists()) return [];
 
@@ -229,6 +236,7 @@ class LibraryScanner {
     await for (final entity
         in root.list(recursive: true, followLinks: false)) {
       if (entity is! File || !isVideoFile(entity.path)) continue;
+      if (excludedPaths.contains(entity.path)) continue;
       final parsed =
           parseShowTitleAndEpisode(p.basenameWithoutExtension(entity.path));
       if (parsed == null) continue;
