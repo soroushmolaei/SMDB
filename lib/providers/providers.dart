@@ -115,11 +115,13 @@ class AppSettingsData {
   final String? omdbApiKey;
   final String? proxyHost;
   final int? proxyPort;
+  final String? sortExclusionWords;
   AppSettingsData({
     this.tmdbApiKey,
     this.omdbApiKey,
     this.proxyHost,
     this.proxyPort,
+    this.sortExclusionWords,
   });
 }
 
@@ -133,7 +135,32 @@ final appSettingsProvider = FutureProvider<AppSettingsData>((ref) async {
     omdbApiKey: (omdbKey != null && omdbKey.isNotEmpty) ? omdbKey : null,
     proxyHost: (proxyHost != null && proxyHost.isNotEmpty) ? proxyHost : null,
     proxyPort: config.proxyPort,
+    sortExclusionWords: config.sortExclusionWords,
   );
+});
+
+/// Default sort exclusion words shown the first time Appearance settings
+/// are opened, and used whenever nothing has been saved yet -- common
+/// English leading articles, so the feature is useful immediately
+/// without requiring setup first.
+const String defaultSortExclusionWords = 'The, A, An';
+
+/// Parsed, trimmed leading words to ignore when sorting/grouping titles
+/// alphabetically (see [sortableTitle]). Falls back to
+/// [defaultSortExclusionWords] until the person saves their own list --
+/// including while [appSettingsProvider] is still loading, so titles
+/// don't briefly sort one way and then jump to another right after
+/// startup.
+final sortExclusionWordsProvider = Provider<List<String>>((ref) {
+  final raw = ref.watch(appSettingsProvider).maybeWhen(
+        data: (s) => s.sortExclusionWords ?? defaultSortExclusionWords,
+        orElse: () => defaultSortExclusionWords,
+      );
+  return raw
+      .split(',')
+      .map((w) => w.trim())
+      .where((w) => w.isNotEmpty)
+      .toList();
 });
 
 // ---------------------------------------------------------------------------
@@ -1357,6 +1384,36 @@ class ScanController extends StateNotifier<ScanState> {
     }
   }
 
+  /// Force-refreshes awards for a movie/show from Wikidata, bypassing the
+  /// "only once" guard [hasAwardsFetched] enforces for the passive
+  /// AwardsSection widget -- called from Refresh Metadata (full and
+  /// skipImages modes, since awards aren't an image) so a manual refresh
+  /// actually catches new wins/nominations instead of leaving whatever
+  /// was cached the first time the detail page was opened.
+  Future<void> _refreshAwardsFor(
+    String itemType,
+    int itemId,
+    String? imdbId,
+  ) async {
+    if (imdbId == null) return;
+    try {
+      final wikidata = ref.read(wikidataServiceProvider);
+      final results = await wikidata.getAwardsByImdbId(imdbId);
+      await db.setAwardsFor(
+        itemType,
+        itemId,
+        results
+            .map((r) =>
+                AwardInput(name: r.name, result: r.result, year: r.year))
+            .toList(),
+      );
+      await db.markAwardsChecked(itemType, itemId);
+    } catch (_) {
+      // Awards are a nice-to-have; never let a lookup failure break a
+      // metadata refresh.
+    }
+  }
+
   /// Re-runs matching for a single already-scanned movie (the "Update"
   /// button on the movie detail screen). If the movie already has a
   /// tmdbId or imdbId -- from the original match, or a manual correction
@@ -1493,6 +1550,13 @@ class ScanController extends StateNotifier<ScanState> {
       }
       if (includeImages) {
         unawaited(_saveMovieThumbnails(movieId, match));
+      }
+      if (includeOtherFields) {
+        unawaited(_refreshAwardsFor(
+          'movie',
+          movieId,
+          match.imdbId ?? movie.imdbId,
+        ));
       }
       success = true;
     } else if (trailerPath != movie.trailerFilePath) {
@@ -1642,6 +1706,11 @@ class ScanController extends StateNotifier<ScanState> {
         } catch (_) {
           // Non-fatal.
         }
+        unawaited(_refreshAwardsFor(
+          'show',
+          showId,
+          match.imdbId ?? show.imdbId,
+        ));
       }
       success = true;
     }

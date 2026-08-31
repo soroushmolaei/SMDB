@@ -254,12 +254,35 @@ class _AppShellState extends ConsumerState<AppShell> {
                     ),
                   ),
                 if (scanState.status == ScanStatus.scanning ||
-                    scanState.status == ScanStatus.matching)
+                    scanState.status == ScanStatus.matching) ...[
+                  if (scanState.status == ScanStatus.matching &&
+                      scanState.currentItem != null &&
+                      scanState.currentItem!.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
+                      child: Text(
+                        '${scanState.processed + 1} of '
+                        '${scanState.total}: ${scanState.currentItem}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                            fontSize: 12, color: Colors.white54),
+                      ),
+                    )
+                  else if (scanState.status == ScanStatus.scanning)
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(12, 6, 12, 2),
+                      child: Text(
+                        'Scanning folder…',
+                        style: TextStyle(fontSize: 12, color: Colors.white54),
+                      ),
+                    ),
                   LinearProgressIndicator(
                     value: scanState.total > 0
                         ? scanState.processed / scanState.total
                         : null,
                   ),
+                ],
                 Expanded(
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -895,6 +918,7 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
         : const <Episode>[];
     final busy = ref.watch(scanControllerProvider).status ==
         ScanStatus.matching;
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
 
     return moviesAsync.when(
       data: (movies) {
@@ -961,8 +985,8 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
             return false;
           }
           if (widget.letter != null) {
-            final first =
-                item.title.isEmpty ? '#' : item.title[0].toLowerCase();
+            final sortable = sortableTitle(item.title, exclusionWords);
+            final first = sortable.isEmpty ? '#' : sortable[0].toLowerCase();
             if (widget.letter == '#') {
               if (RegExp(r'[a-z]').hasMatch(first)) return false;
             } else if (first != widget.letter) {
@@ -1001,7 +1025,7 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
           return true;
         }).toList();
 
-        sortMediaItems(filtered, widget.sort);
+        sortMediaItems(filtered, widget.sort, exclusionWords: exclusionWords);
 
         final genreSet = <String>{};
         final yearSet = <int>{};
