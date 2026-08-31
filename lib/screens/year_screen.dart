@@ -35,6 +35,7 @@ class _YearScreenState extends ConsumerState<YearScreen>
     final shows = ref.watch(showsStreamProvider).value ?? [];
     final busy =
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
     return moviesAsync.when(
@@ -131,7 +132,7 @@ class _YearScreenState extends ConsumerState<YearScreen>
         final filtered = dated
             .where((e) => e.year! >= start.round() && e.year! <= end.round())
             .toList();
-        sortMediaItems(filtered, _sort);
+        sortMediaItems(filtered, _sort, exclusionWords: exclusionWords);
 
         final isFullRange =
             start.round() == minYear && end.round() == maxYear;

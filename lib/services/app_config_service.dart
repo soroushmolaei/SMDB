@@ -32,6 +32,11 @@ class AppConfig {
   /// movie/show detail pages. Null means "use the default" (0.5).
   final double? backdropOverlayOpacity;
 
+  /// Comma-separated leading words to ignore when sorting/grouping titles
+  /// alphabetically (e.g. "The, A, An"), so "The Matrix" sorts and
+  /// groups under M instead of T. Null means "use the default".
+  final String? sortExclusionWords;
+
   AppConfig({
     this.tmdbApiKey,
     this.omdbApiKey,
@@ -41,6 +46,7 @@ class AppConfig {
     this.themeColor,
     this.themeMode,
     this.backdropOverlayOpacity,
+    this.sortExclusionWords,
   });
 
   Map<String, dynamic> toJson() => {
@@ -52,6 +58,7 @@ class AppConfig {
         'theme_color': themeColor,
         'theme_mode': themeMode,
         'backdrop_overlay_opacity': backdropOverlayOpacity,
+        'sort_exclusion_words': sortExclusionWords,
       };
 
   factory AppConfig.fromJson(Map<String, dynamic> json) => AppConfig(
@@ -64,6 +71,7 @@ class AppConfig {
         themeMode: json['theme_mode'] as String?,
         backdropOverlayOpacity:
             (json['backdrop_overlay_opacity'] as num?)?.toDouble(),
+        sortExclusionWords: json['sort_exclusion_words'] as String?,
       );
 }
 
@@ -118,6 +126,7 @@ class AppConfigService {
     String? themeColor,
     String? themeMode,
     double? backdropOverlayOpacity,
+    String? sortExclusionWords,
   }) async {
     final current = await load();
     final updated = AppConfig(
@@ -132,6 +141,7 @@ class AppConfigService {
       themeMode: themeMode ?? current.themeMode,
       backdropOverlayOpacity:
           backdropOverlayOpacity ?? current.backdropOverlayOpacity,
+      sortExclusionWords: sortExclusionWords ?? current.sortExclusionWords,
     );
     return save(updated);
   }

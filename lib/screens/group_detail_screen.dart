@@ -84,6 +84,7 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
     final showsAsync = ref.watch(showsStreamProvider);
     final busy =
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
 
     return collectionsAsync.when(
       data: (collections) {
@@ -163,7 +164,7 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                                   ),
                                 )),
                     ];
-                    sortMediaItems(items, _sort);
+                    sortMediaItems(items, _sort, exclusionWords: exclusionWords);
 
                     return Column(
                       children: [

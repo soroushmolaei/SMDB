@@ -74,13 +74,40 @@ extension SortOptionLabel on SortOption {
   }
 }
 
-void sortMediaItems(List<MediaItem> items, SortOption option) {
+/// Strips a single leading word from [title] if it case-insensitively
+/// matches one of [exclusionWords] followed by a space (e.g. "The Matrix"
+/// -> "Matrix" when "The" is excluded, but "Apple" is untouched even if
+/// "A" is excluded, since "A" isn't followed by a space there). Returns
+/// [title] unchanged if no leading word matches. Used for both sorting
+/// and the A-Z alphabet index, so "The Matrix" sorts and groups under M
+/// the way library catalogs conventionally do.
+String sortableTitle(String title, List<String> exclusionWords) {
+  if (exclusionWords.isEmpty) return title;
+  for (final word in exclusionWords) {
+    if (word.isEmpty) continue;
+    final prefix = '$word ';
+    if (title.length > prefix.length &&
+        title.substring(0, prefix.length).toLowerCase() ==
+            prefix.toLowerCase()) {
+      return title.substring(prefix.length);
+    }
+  }
+  return title;
+}
+
+void sortMediaItems(
+  List<MediaItem> items,
+  SortOption option, {
+  List<String> exclusionWords = const [],
+}) {
   switch (option) {
     case SortOption.titleAsc:
-      items.sort((a, b) => a.title.compareTo(b.title));
+      items.sort((a, b) => sortableTitle(a.title, exclusionWords)
+          .compareTo(sortableTitle(b.title, exclusionWords)));
       break;
     case SortOption.titleDesc:
-      items.sort((a, b) => b.title.compareTo(a.title));
+      items.sort((a, b) => sortableTitle(b.title, exclusionWords)
+          .compareTo(sortableTitle(a.title, exclusionWords)));
       break;
     case SortOption.yearNewest:
       items.sort((a, b) => (b.year ?? 0).compareTo(a.year ?? 0));

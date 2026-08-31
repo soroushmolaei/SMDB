@@ -28,6 +28,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   final _omdbKeyController = TextEditingController();
   final _proxyHostController = TextEditingController();
   final _proxyPortController = TextEditingController();
+  final _sortExclusionWordsController = TextEditingController();
   bool _loaded = false;
   bool _testing = false;
   String? _testResult;
@@ -44,6 +45,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _omdbKeyController.dispose();
     _proxyHostController.dispose();
     _proxyPortController.dispose();
+    _sortExclusionWordsController.dispose();
     super.dispose();
   }
 
@@ -53,7 +55,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     _omdbKeyController.text = data.omdbApiKey ?? '';
     _proxyHostController.text = data.proxyHost ?? '';
     _proxyPortController.text = data.proxyPort?.toString() ?? '';
+    _sortExclusionWordsController.text =
+        data.sortExclusionWords ?? defaultSortExclusionWords;
     _loaded = true;
+  }
+
+  Future<void> _saveSortExclusionWords() async {
+    await AppConfigService.update(
+      sortExclusionWords: _sortExclusionWordsController.text.trim(),
+    );
+    ref.invalidate(appSettingsProvider);
   }
 
   Future<void> _save() async {
@@ -687,6 +698,40 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       textAlign: TextAlign.end,
                       style: TextStyle(color: onSurface, fontSize: 13),
                     ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Sort Exclusion Words',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 12),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Leading words to ignore when sorting or grouping movie/'
+                'show titles alphabetically, comma-separated -- so "The '
+                'Matrix" sorts and groups under M instead of T.',
+                style: TextStyle(color: onSurfaceVariant, fontSize: 11),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _sortExclusionWordsController,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        border: OutlineInputBorder(),
+                        hintText: 'The, A, An',
+                      ),
+                      onSubmitted: (_) => _saveSortExclusionWords(),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _saveSortExclusionWords,
+                    child: const Text('Save'),
                   ),
                 ],
               ),

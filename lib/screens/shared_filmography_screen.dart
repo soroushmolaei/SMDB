@@ -55,6 +55,7 @@ class _SharedFilmographyScreenState
     final episodesAsync = ref.watch(allEpisodesStreamProvider);
     final busy =
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
 
     return Scaffold(
       appBar: AppBar(
@@ -159,7 +160,7 @@ class _SharedFilmographyScreenState
                                   ),
                                 )),
                     ];
-                    sortMediaItems(items, _sort);
+                    sortMediaItems(items, _sort, exclusionWords: exclusionWords);
 
                     return Column(
                       children: [

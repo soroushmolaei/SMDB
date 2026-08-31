@@ -109,6 +109,7 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
     final shows = ref.watch(showsStreamProvider).value ?? [];
     final busy =
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(widget.rating)),
@@ -158,7 +159,7 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                         ),
                       )),
           ];
-          sortMediaItems(items, _sort);
+          sortMediaItems(items, _sort, exclusionWords: exclusionWords);
 
           return Column(
             children: [
