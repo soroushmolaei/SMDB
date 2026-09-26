@@ -8,6 +8,7 @@ import '../utils/metadata_refresh_mode.dart';
 import '../widgets/custom_title_bar.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
+import 'advanced_filter_screen.dart';
 import 'genres_list_screen.dart';
 import 'group_detail_screen.dart';
 import 'language_list_screen.dart';
@@ -26,12 +27,13 @@ enum _Section {
   genres,
   mpa,
   language,
+  year,
+  advanced,
   latestAdditions,
   favorites,
   notYetWatched,
   watched,
   statistics,
-  year,
 }
 
 enum _ContentMode { moviesOnly, showsOnly, combined }
@@ -81,6 +83,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return 'Statistics';
       case _Section.year:
         return 'Year';
+      case _Section.advanced:
+        return 'Advanced';
     }
   }
 
@@ -436,6 +440,8 @@ class _AppShellState extends ConsumerState<AppShell> {
         return const StatisticsScreen();
       case _Section.year:
         return const YearScreen();
+      case _Section.advanced:
+        return const AdvancedFilterScreen();
     }
   }
 }
@@ -533,6 +539,12 @@ class _Sidebar extends StatelessWidget {
                   label: 'Year',
                   selected: selected == _Section.year,
                   onTap: () => onSelect(_Section.year),
+                ),
+                _NavItem(
+                  icon: Icons.tune,
+                  label: 'Advanced',
+                  selected: selected == _Section.advanced,
+                  onTap: () => onSelect(_Section.advanced),
                 ),
                 const SizedBox(height: 12),
                 const _SectionHeader('MY VIEWS'),
