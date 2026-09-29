@@ -2,8 +2,10 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
+import 'package:url_launcher/url_launcher.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
@@ -12,6 +14,7 @@ import '../services/library_scanner.dart';
 import '../services/omdb_service.dart';
 import '../services/tmdb_service.dart';
 import '../theme/app_theme.dart';
+import '../utils/donate_options.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -20,7 +23,7 @@ class SettingsScreen extends ConsumerStatefulWidget {
   ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-enum _SettingsCategory { appearance, api, database, storage, library }
+enum _SettingsCategory { appearance, api, database, storage, library, support }
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   _SettingsCategory _category = _SettingsCategory.appearance;
@@ -540,6 +543,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           _storageSection(thumbnailBackfill, originalImageDownload),
       _SettingsCategory.library:
           _librarySection(foldersAsync, exclusionsAsync, scanState, isScanning),
+      _SettingsCategory.support: _supportSection(onSurface, onSurfaceVariant),
     };
     return Row(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -569,6 +573,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             NavigationRailDestination(
               icon: Icon(Icons.folder_outlined),
               label: Text('Library'),
+            ),
+            NavigationRailDestination(
+              icon: Icon(Icons.favorite_border),
+              label: Text('Support'),
             ),
           ],
         ),
@@ -1075,6 +1083,58 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ],
                 ],
               ),
+    ];
+  }
+
+  List<Widget> _supportSection(Color onSurface, Color onSurfaceVariant) {
+    return [
+      Text(
+        'Support SMDB',
+        style: TextStyle(
+            fontWeight: FontWeight.bold, fontSize: 16, color: onSurface),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'SMDB is free. If it is useful to you, you can support its '
+        'development here. Thank you!',
+        style: TextStyle(color: onSurfaceVariant),
+      ),
+      const SizedBox(height: 16),
+      if (donateOptions.isEmpty)
+        Text(
+          'No donation methods have been added yet.',
+          style: TextStyle(color: onSurfaceVariant),
+        ),
+      for (final option in donateOptions)
+        Card(
+          child: ListTile(
+            leading: Icon(
+              option.isCrypto ? Icons.currency_bitcoin : Icons.open_in_new,
+            ),
+            title: Text(option.name),
+            subtitle: SelectableText(option.value),
+            trailing: option.isCrypto
+                ? IconButton(
+                    icon: const Icon(Icons.copy),
+                    tooltip: 'Copy address',
+                    onPressed: () async {
+                      final messenger = ScaffoldMessenger.of(context);
+                      await Clipboard.setData(
+                          ClipboardData(text: option.value));
+                      messenger.showSnackBar(
+                        SnackBar(content: Text('${option.name} copied')),
+                      );
+                    },
+                  )
+                : null,
+            onTap: option.isCrypto
+                ? null
+                : () => launchUrl(
+                      Uri.parse(option.value),
+                      mode: LaunchMode.externalApplication,
+                    ),
+          ),
+        ),
     ];
   }
 
