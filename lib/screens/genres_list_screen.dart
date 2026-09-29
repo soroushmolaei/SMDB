@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
 import 'movie_detail_screen.dart';
@@ -32,7 +33,8 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
     final shows = ref.watch(showsStreamProvider).value ?? [];
     final colorScheme = Theme.of(context).colorScheme;
 
-    return moviesAsync.when(
+    return LetterIndexed(
+      builder: (context, letter) => moviesAsync.when(
       data: (movies) {
         final counts = <String, int>{};
         void addGenres(String? raw) {
@@ -60,6 +62,10 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
             ),
           );
         }
+        final shownGenres = genres
+            .where((x) => matchesLetter(x, letter, const <String>[]))
+            .toList();
+
 
         return Column(
           children: [
@@ -112,9 +118,9 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
                 ),
-                itemCount: genres.length,
+                itemCount: shownGenres.length,
                 itemBuilder: (context, index) {
-                  final genre = genres[index];
+                  final genre = shownGenres[index];
                   final isSelected = _selected.contains(genre);
                   return Card(
                     color: _combineMode && isSelected
@@ -184,6 +190,7 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),
+    ),
     );
   }
 }
@@ -267,15 +274,16 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
                       )),
           ];
           sortMediaItems(items, _sort, exclusionWords: exclusionWords);
+          final shown = applyLetterFilter(items, exclusionWords);
 
-          return Column(
+          return withAlphabetIndex(Column(
             children: [
               if (selecting)
                 SelectionActionBar(
                   selectedCount: selectedKeys.length,
-                  totalCount: items.length,
+                  totalCount: shown.length,
                   busy: busy,
-                  onSelectAll: () => selectAll(items),
+                  onSelectAll: () => selectAll(shown),
                   onClear: clearSelection,
                   onCancel: toggleSelectionMode,
                   onRefresh: refreshSelected,
@@ -289,12 +297,12 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
                   icon: Icon(selecting ? Icons.close : Icons.checklist),
                   tooltip: selecting ? 'Cancel selection' : 'Select multiple',
                   onPressed:
-                      items.isEmpty && !selecting ? null : toggleSelectionMode,
+                      shown.isEmpty && !selecting ? null : toggleSelectionMode,
                 ),
               ),
               Expanded(
                 child: MediaItemView(
-                  items: items,
+                  items: shown,
                   gridView: true,
                   emptyTitle: widget.genres.length > 1
                       ? 'No movies or shows have all of these genres'
@@ -305,7 +313,7 @@ class _GenreDetailScreenState extends ConsumerState<GenreDetailScreen>
                 ),
               ),
             ],
-          );
+          ));
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),

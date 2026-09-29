@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
 import '../utils/metadata_refresh_mode.dart';
+import 'alphabet_index.dart';
 import 'media_item.dart';
 import 'poster_card.dart';
 
@@ -16,6 +17,35 @@ mixin MediaSelectionMixin<T extends ConsumerStatefulWidget>
   bool selecting = false;
   final Set<String> selectedKeys = {};
   final Map<String, MediaItem> selectedItems = {};
+
+  /// Currently selected A-Z index letter (null = no letter filter).
+  String? letterFilter;
+
+  /// [items] narrowed to [letterFilter] (same rules as the sort: leading
+  /// exclusion words are skipped).
+  List<MediaItem> applyLetterFilter(
+    List<MediaItem> items,
+    List<String> exclusionWords,
+  ) {
+    if (letterFilter == null) return items;
+    return items
+        .where((i) => matchesLetter(i.title, letterFilter, exclusionWords))
+        .toList();
+  }
+
+  /// Places the A-Z index strip beside [child].
+  Widget withAlphabetIndex(Widget child) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        AlphabetIndex(
+          selected: letterFilter,
+          onSelect: (l) => setState(() => letterFilter = l),
+        ),
+        Expanded(child: child),
+      ],
+    );
+  }
 
   void toggleSelectionMode() {
     setState(() {

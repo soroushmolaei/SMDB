@@ -130,15 +130,16 @@ class _AdvancedFilterScreenState extends ConsumerState<AdvancedFilterScreen>
           return true;
         }).toList();
         sortMediaItems(filtered, _sort, exclusionWords: exclusionWords);
+        final shown = applyLetterFilter(filtered, exclusionWords);
 
-        return Column(
+        return withAlphabetIndex(Column(
           children: [
             if (selecting)
               SelectionActionBar(
                 selectedCount: selectedKeys.length,
-                totalCount: filtered.length,
+                totalCount: shown.length,
                 busy: busy,
-                onSelectAll: () => selectAll(filtered),
+                onSelectAll: () => selectAll(shown),
                 onClear: clearSelection,
                 onCancel: toggleSelectionMode,
                 onRefresh: refreshSelected,
@@ -163,14 +164,14 @@ class _AdvancedFilterScreenState extends ConsumerState<AdvancedFilterScreen>
               trailing: IconButton(
                 icon: Icon(selecting ? Icons.close : Icons.checklist),
                 tooltip: selecting ? 'Cancel selection' : 'Select multiple',
-                onPressed: filtered.isEmpty && !selecting
+                onPressed: shown.isEmpty && !selecting
                     ? null
                     : toggleSelectionMode,
               ),
             ),
             Expanded(
               child: MediaItemView(
-                items: filtered,
+                items: shown,
                 gridView: true,
                 emptyTitle: allItems.isEmpty
                     ? 'Nothing in your library yet'
@@ -184,7 +185,7 @@ class _AdvancedFilterScreenState extends ConsumerState<AdvancedFilterScreen>
               ),
             ),
           ],
-        );
+        ));
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),

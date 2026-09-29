@@ -165,15 +165,16 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                                 )),
                     ];
                     sortMediaItems(items, _sort, exclusionWords: exclusionWords);
+                    final shown = applyLetterFilter(items, exclusionWords);
 
-                    return Column(
+                    return withAlphabetIndex(Column(
                       children: [
                         if (selecting)
                           SelectionActionBar(
                             selectedCount: selectedKeys.length,
-                            totalCount: items.length,
+                            totalCount: shown.length,
                             busy: busy,
-                            onSelectAll: () => selectAll(items),
+                            onSelectAll: () => selectAll(shown),
                             onClear: clearSelection,
                             onCancel: toggleSelectionMode,
                             onRefresh: refreshSelected,
@@ -191,14 +192,14 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                             tooltip: selecting
                                 ? 'Cancel selection'
                                 : 'Select multiple',
-                            onPressed: items.isEmpty && !selecting
+                            onPressed: shown.isEmpty && !selecting
                                 ? null
                                 : toggleSelectionMode,
                           ),
                         ),
                         Expanded(
                           child: MediaItemView(
-                            items: items,
+                            items: shown,
                             gridView: true,
                             emptyTitle: 'Nothing in this group yet',
                             emptySubtitle: 'Add movies or shows to it from '
@@ -209,7 +210,7 @@ class _GroupDetailScreenState extends ConsumerState<GroupDetailScreen>
                           ),
                         ),
                       ],
-                    );
+                    ));
                   },
                   loading: () =>
                       const Center(child: CircularProgressIndicator()),

@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../utils/metadata_refresh_mode.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/custom_title_bar.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
@@ -292,7 +293,7 @@ class _AppShellState extends ConsumerState<AppShell> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       if (_isLibrarySection)
-                        _AlphabetIndex(
+                        AlphabetIndex(
                           selected: _letterFilter,
                           onSelect: (l) =>
                               setState(() => _letterFilter = l),
@@ -783,51 +784,6 @@ class _Banner extends StatelessWidget {
 }
 
 // ---------------------------------------------------------------------------
-// A-Z index
-// ---------------------------------------------------------------------------
-
-class _AlphabetIndex extends StatelessWidget {
-  final String? selected;
-  final ValueChanged<String?> onSelect;
-  const _AlphabetIndex({required this.selected, required this.onSelect});
-
-  @override
-  Widget build(BuildContext context) {
-    const letters = [
-      'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', //
-      'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '#',
-    ];
-    return Container(
-      width: 26,
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      child: ListView(
-        children: letters.map((l) {
-          final isSelected = selected == l;
-          return InkWell(
-            onTap: () => onSelect(isSelected ? null : l),
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 3),
-              color:
-                  isSelected
-                      ? const Color(0xFF6C5CE7).withValues(alpha: 0.3)
-                      : null,
-              alignment: Alignment.center,
-              child: Text(
-                l,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isSelected ? Colors.white : Colors.white38,
-                ),
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Unified library section: movies-only, shows-only, or combined, with
 // search, letter index, genre/year/rating filters, and sort — all sharing
 // one implementation via MediaItem.
@@ -996,14 +952,8 @@ class _LibrarySectionState extends ConsumerState<_LibrarySection> {
               !item.title.toLowerCase().contains(widget.query)) {
             return false;
           }
-          if (widget.letter != null) {
-            final sortable = sortableTitle(item.title, exclusionWords);
-            final first = sortable.isEmpty ? '#' : sortable[0].toLowerCase();
-            if (widget.letter == '#') {
-              if (RegExp(r'[a-z]').hasMatch(first)) return false;
-            } else if (first != widget.letter) {
-              return false;
-            }
+          if (!matchesLetter(item.title, widget.letter, exclusionWords)) {
+            return false;
           }
           if (widget.selectedGenre != null) {
             final genres =

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
 import '../utils/metadata_refresh_mode.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/smart_image.dart';
 import 'person_detail_screen.dart';
@@ -74,7 +75,8 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
     final busy =
         ref.watch(scanControllerProvider).status == ScanStatus.matching;
 
-    return Column(
+    return LetterIndexed(
+      builder: (context, letter) => Column(
       children: [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -141,6 +143,7 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                       ? people
                       : people.where(
                           (p) => p.name.toLowerCase().contains(_query)))
+                  .where((p) => matchesLetter(p.name, letter, const <String>[]))
                   .toList();
 
               if (filtered.isEmpty) {
@@ -379,6 +382,7 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
           ),
         ),
       ],
+    ),
     );
   }
 

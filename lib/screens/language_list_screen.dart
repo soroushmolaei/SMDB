@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
 import 'movie_detail_screen.dart';
@@ -18,7 +19,8 @@ class LanguageListScreen extends ConsumerWidget {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final shows = ref.watch(showsStreamProvider).value ?? [];
 
-    return moviesAsync.when(
+    return LetterIndexed(
+      builder: (context, letter) => moviesAsync.when(
       data: (movies) {
         final counts = <String, int>{};
         for (final m in movies) {
@@ -43,6 +45,10 @@ class LanguageListScreen extends ConsumerWidget {
             ),
           );
         }
+        final shownLanguages = languages
+            .where((x) => matchesLetter(x, letter, const <String>[]))
+            .toList();
+
 
         return GridView.builder(
           padding: const EdgeInsets.all(16),
@@ -52,9 +58,9 @@ class LanguageListScreen extends ConsumerWidget {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemCount: languages.length,
+          itemCount: shownLanguages.length,
           itemBuilder: (context, index) {
-            final language = languages[index];
+            final language = shownLanguages[index];
             return Card(
               color: Colors.white.withValues(alpha: 0.05),
               child: InkWell(
@@ -91,6 +97,7 @@ class LanguageListScreen extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),
+    ),
     );
   }
 }
@@ -169,15 +176,16 @@ class _LanguageMoviesScreenState extends ConsumerState<LanguageMoviesScreen>
                       )),
           ];
           sortMediaItems(items, _sort, exclusionWords: exclusionWords);
+          final shown = applyLetterFilter(items, exclusionWords);
 
-          return Column(
+          return withAlphabetIndex(Column(
             children: [
               if (selecting)
                 SelectionActionBar(
                   selectedCount: selectedKeys.length,
-                  totalCount: items.length,
+                  totalCount: shown.length,
                   busy: busy,
-                  onSelectAll: () => selectAll(items),
+                  onSelectAll: () => selectAll(shown),
                   onClear: clearSelection,
                   onCancel: toggleSelectionMode,
                   onRefresh: refreshSelected,
@@ -191,12 +199,12 @@ class _LanguageMoviesScreenState extends ConsumerState<LanguageMoviesScreen>
                   icon: Icon(selecting ? Icons.close : Icons.checklist),
                   tooltip: selecting ? 'Cancel selection' : 'Select multiple',
                   onPressed:
-                      items.isEmpty && !selecting ? null : toggleSelectionMode,
+                      shown.isEmpty && !selecting ? null : toggleSelectionMode,
                 ),
               ),
               Expanded(
                 child: MediaItemView(
-                  items: items,
+                  items: shown,
                   gridView: true,
                   emptyTitle: 'No movies or shows in this language',
                   selectionMode: selecting,
@@ -205,7 +213,7 @@ class _LanguageMoviesScreenState extends ConsumerState<LanguageMoviesScreen>
                 ),
               ),
             ],
-          );
+          ));
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),

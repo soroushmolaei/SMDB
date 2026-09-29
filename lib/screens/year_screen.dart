@@ -133,11 +133,12 @@ class _YearScreenState extends ConsumerState<YearScreen>
             .where((e) => e.year! >= start.round() && e.year! <= end.round())
             .toList();
         sortMediaItems(filtered, _sort, exclusionWords: exclusionWords);
+        final shown = applyLetterFilter(filtered, exclusionWords);
 
         final isFullRange =
             start.round() == minYear && end.round() == maxYear;
 
-        return Column(
+        return withAlphabetIndex(Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -150,11 +151,11 @@ class _YearScreenState extends ConsumerState<YearScreen>
                       Expanded(
                         child: Text(
                           hasSpan
-                              ? '${filtered.length} title'
-                                  '${filtered.length == 1 ? '' : 's'} • '
+                              ? '${shown.length} title'
+                                  '${shown.length == 1 ? '' : 's'} • '
                                   '${start.round()}–${end.round()}'
-                              : '${filtered.length} title'
-                                  '${filtered.length == 1 ? '' : 's'} • '
+                              : '${shown.length} title'
+                                  '${shown.length == 1 ? '' : 's'} • '
                                   '$minYear',
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
@@ -237,9 +238,9 @@ class _YearScreenState extends ConsumerState<YearScreen>
             if (selecting)
               SelectionActionBar(
                 selectedCount: selectedKeys.length,
-                totalCount: filtered.length,
+                totalCount: shown.length,
                 busy: busy,
-                onSelectAll: () => selectAll(filtered),
+                onSelectAll: () => selectAll(shown),
                 onClear: clearSelection,
                 onCancel: toggleSelectionMode,
                 onRefresh: refreshSelected,
@@ -252,14 +253,14 @@ class _YearScreenState extends ConsumerState<YearScreen>
               trailing: IconButton(
                 icon: Icon(selecting ? Icons.close : Icons.checklist),
                 tooltip: selecting ? 'Cancel selection' : 'Select multiple',
-                onPressed: filtered.isEmpty && !selecting
+                onPressed: shown.isEmpty && !selecting
                     ? null
                     : toggleSelectionMode,
               ),
             ),
             Expanded(
               child: MediaItemView(
-                items: filtered,
+                items: shown,
                 gridView: true,
                 emptyTitle: 'No titles in this range',
                 emptySubtitle: 'Try widening the year range above.',
@@ -269,7 +270,7 @@ class _YearScreenState extends ConsumerState<YearScreen>
               ),
             ),
           ],
-        );
+        ));
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),

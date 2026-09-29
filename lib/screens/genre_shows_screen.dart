@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/poster_card.dart';
 import 'show_detail_screen.dart';
 
@@ -12,10 +13,12 @@ class GenreShowsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final showsAsync = ref.watch(showsStreamProvider);
+    final exclusionWords = ref.watch(sortExclusionWordsProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(genre)),
-      body: showsAsync.when(
+      body: LetterIndexed(
+        builder: (context, letter) => showsAsync.when(
         data: (shows) {
           final filtered = shows.where((s) {
             final genres =
@@ -32,6 +35,10 @@ class GenreShowsScreen extends ConsumerWidget {
             );
           }
 
+          final shown = filtered
+              .where((x) => matchesLetter(x.title, letter, exclusionWords))
+              .toList();
+
           return GridView.builder(
             padding: const EdgeInsets.all(12),
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
@@ -40,9 +47,9 @@ class GenreShowsScreen extends ConsumerWidget {
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
             ),
-            itemCount: filtered.length,
+            itemCount: shown.length,
             itemBuilder: (context, index) {
-              final show = filtered[index];
+              final show = shown[index];
               return PosterCard(
                 title: show.title,
                 posterUrl: show.posterPath,
@@ -59,6 +66,7 @@ class GenreShowsScreen extends ConsumerWidget {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),
+      ),
       ),
     );
   }

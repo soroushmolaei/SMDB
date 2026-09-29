@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../widgets/alphabet_index.dart';
 import '../widgets/media_grid.dart';
 import '../widgets/media_item.dart';
 import 'movie_detail_screen.dart';
@@ -15,7 +16,8 @@ class MpaListScreen extends ConsumerWidget {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final shows = ref.watch(showsStreamProvider).value ?? [];
 
-    return moviesAsync.when(
+    return LetterIndexed(
+      builder: (context, letter) => moviesAsync.when(
       data: (movies) {
         final counts = <String, int>{};
         for (final m in movies) {
@@ -38,6 +40,10 @@ class MpaListScreen extends ConsumerWidget {
             ),
           );
         }
+        final shownRatings = ratings
+            .where((x) => matchesLetter(x, letter, const <String>[]))
+            .toList();
+
 
         return GridView.builder(
           padding: const EdgeInsets.all(16),
@@ -47,9 +53,9 @@ class MpaListScreen extends ConsumerWidget {
             crossAxisSpacing: 12,
             mainAxisSpacing: 12,
           ),
-          itemCount: ratings.length,
+          itemCount: shownRatings.length,
           itemBuilder: (context, index) {
-            final rating = ratings[index];
+            final rating = shownRatings[index];
             return Card(
               color: Colors.white.withValues(alpha: 0.05),
               child: InkWell(
@@ -86,6 +92,7 @@ class MpaListScreen extends ConsumerWidget {
       },
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, st) => Center(child: Text('Error: $e')),
+    ),
     );
   }
 }
@@ -160,15 +167,16 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                       )),
           ];
           sortMediaItems(items, _sort, exclusionWords: exclusionWords);
+          final shown = applyLetterFilter(items, exclusionWords);
 
-          return Column(
+          return withAlphabetIndex(Column(
             children: [
               if (selecting)
                 SelectionActionBar(
                   selectedCount: selectedKeys.length,
-                  totalCount: items.length,
+                  totalCount: shown.length,
                   busy: busy,
-                  onSelectAll: () => selectAll(items),
+                  onSelectAll: () => selectAll(shown),
                   onClear: clearSelection,
                   onCancel: toggleSelectionMode,
                   onRefresh: refreshSelected,
@@ -182,12 +190,12 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                   icon: Icon(selecting ? Icons.close : Icons.checklist),
                   tooltip: selecting ? 'Cancel selection' : 'Select multiple',
                   onPressed:
-                      items.isEmpty && !selecting ? null : toggleSelectionMode,
+                      shown.isEmpty && !selecting ? null : toggleSelectionMode,
                 ),
               ),
               Expanded(
                 child: MediaItemView(
-                  items: items,
+                  items: shown,
                   gridView: true,
                   emptyTitle: 'No movies or shows with this rating',
                   selectionMode: selecting,
@@ -196,7 +204,7 @@ class _MpaMoviesScreenState extends ConsumerState<MpaMoviesScreen>
                 ),
               ),
             ],
-          );
+          ));
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, st) => Center(child: Text('Error: $e')),
