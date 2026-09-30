@@ -18,4 +18,10 @@ class DonateOption {
 /// Example:
 ///   DonateOption(name: 'Ko-fi', value: 'https://ko-fi.com/yourname'),
 ///   DonateOption(name: 'USDT (TRC20)', value: 'T...', isCrypto: true),
-const donateOptions = <DonateOption>[];
+const donateOptions = <DonateOption>[
+  DonateOption(
+    name: 'USDT (TRON / TRC20)',
+    value: 'TRDD5PuNpkVwG7fPb9MvSPea2V7baCxFt6',
+    isCrypto: true,
+  ),
+];
