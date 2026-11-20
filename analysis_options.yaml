@@ -3,3 +3,10 @@ include: package:flutter_lints/flutter.yaml
 linter:
   rules:
     prefer_single_quotes: false
+
+# Temporary: Flutter 3.47 deprecated package:flutter/material.dart in favour
+# of material_ui, which makes flutter analyze fail on 9 findings. Ignore that
+# diagnostic until the imports are migrated to material_ui.
+analyzer:
+  errors:
+    deprecated_member_use: ignore
