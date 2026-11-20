@@ -118,7 +118,7 @@ ThemeData buildAppTheme(AppThemeColor color, Brightness brightness) {
       backgroundColor: scheme.surface,
       surfaceTintColor: scheme.surfaceTint,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: scheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
@@ -133,7 +133,7 @@ ThemeData buildAppTheme(AppThemeColor color, Brightness brightness) {
         borderRadius: BorderRadius.circular(10),
       ),
     ),
-    dialogTheme: DialogTheme(
+    dialogTheme: DialogThemeData(
       backgroundColor: scheme.surfaceContainerHigh,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
