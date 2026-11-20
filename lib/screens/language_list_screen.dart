@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../widgets/alphabet_index.dart';
@@ -36,12 +37,13 @@ class LanguageListScreen extends ConsumerWidget {
         final languages = counts.keys.toList()..sort();
 
         if (languages.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               'No languages yet — scan a movie or show folder first, or '
               'tap Update on existing titles to fill this in.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                  color: context.appColors.textSecondary),
             ),
           );
         }
@@ -62,7 +64,7 @@ class LanguageListScreen extends ConsumerWidget {
           itemBuilder: (context, index) {
             final language = shownLanguages[index];
             return Card(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: context.appColors.surfacePanel,
               child: InkWell(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
@@ -75,7 +77,8 @@ class LanguageListScreen extends ConsumerWidget {
                       horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.language, color: Color(0xFF9C91F5)),
+                      Icon(Icons.language,
+                          color: context.appColors.accent),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -85,7 +88,8 @@ class LanguageListScreen extends ConsumerWidget {
                       ),
                       Text(
                         '${counts[language]}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: TextStyle(
+                            color: context.appColors.textSecondary),
                       ),
                     ],
                   ),

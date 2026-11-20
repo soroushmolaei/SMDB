@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../widgets/alphabet_index.dart';
@@ -33,10 +34,11 @@ class MpaListScreen extends ConsumerWidget {
         final ratings = counts.keys.toList()..sort();
 
         if (ratings.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               'No content ratings yet — scan a movie or show folder first.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                  color: context.appColors.textSecondary),
             ),
           );
         }
@@ -57,7 +59,7 @@ class MpaListScreen extends ConsumerWidget {
           itemBuilder: (context, index) {
             final rating = shownRatings[index];
             return Card(
-              color: Colors.white.withValues(alpha: 0.05),
+              color: context.appColors.surfacePanel,
               child: InkWell(
                 onTap: () => Navigator.of(context).push(
                   MaterialPageRoute(
@@ -69,8 +71,8 @@ class MpaListScreen extends ConsumerWidget {
                       horizontal: 16, vertical: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.shield_outlined,
-                          color: Color(0xFF9C91F5)),
+                      Icon(Icons.shield_outlined,
+                          color: context.appColors.accent),
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
@@ -80,7 +82,8 @@ class MpaListScreen extends ConsumerWidget {
                       ),
                       Text(
                         '${counts[rating]}',
-                        style: const TextStyle(color: Colors.white54),
+                        style: TextStyle(
+                            color: context.appColors.textSecondary),
                       ),
                     ],
                   ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 
@@ -57,17 +58,19 @@ Future<List<int>?> showPersonPickerDialog(
                   const SizedBox(height: 8),
                   Expanded(
                     child: candidates.isEmpty
-                        ? const Center(
+                        ? Center(
                             child: Text(
                               'No other people yet.',
-                              style: TextStyle(color: Colors.white54),
+                              style: TextStyle(
+                                  color: dialogContext.appColors.textSecondary),
                             ),
                           )
                         : filtered.isEmpty
-                            ? const Center(
+                            ? Center(
                                 child: Text(
                                   'No matches.',
-                                  style: TextStyle(color: Colors.white54),
+                                  style: TextStyle(
+                                      color: dialogContext.appColors.textSecondary),
                                 ),
                               )
                             : ListView.builder(

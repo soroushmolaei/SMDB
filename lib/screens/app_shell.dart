@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
+import '../theme/app_theme.dart';
 import '../utils/metadata_refresh_mode.dart';
 import '../widgets/alphabet_index.dart';
 import '../widgets/custom_title_bar.dart';
@@ -270,16 +271,19 @@ class _AppShellState extends ConsumerState<AppShell> {
                         '${scanState.total}: ${scanState.currentItem}',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontSize: 12, color: Colors.white54),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: context.appColors.textSecondary),
                       ),
                     )
                   else if (scanState.status == ScanStatus.scanning)
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(12, 6, 12, 2),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 6, 12, 2),
                       child: Text(
                         'Scanning folder…',
-                        style: TextStyle(fontSize: 12, color: Colors.white54),
+                        style: TextStyle(
+                            fontSize: 12,
+                            color: context.appColors.textSecondary),
                       ),
                     ),
                   LinearProgressIndicator(
@@ -668,7 +672,7 @@ class _NavItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? const Color(0xFF6C5CE7).withValues(alpha: 0.18) : null,
+      color: selected ? context.appColors.selectionTint : null,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -677,7 +681,9 @@ class _NavItem extends StatelessWidget {
             children: [
               Icon(icon,
                   size: 18,
-                  color: selected ? const Color(0xFF9C91F5) : Colors.white60),
+                  color: selected
+                      ? context.appColors.accent
+                      : Colors.white60),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -725,8 +731,9 @@ class _Toolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: Colors.white12)),
+      decoration: BoxDecoration(
+        border: Border(
+            bottom: BorderSide(color: context.appColors.borderSubtle)),
       ),
       child: Row(
         children: [

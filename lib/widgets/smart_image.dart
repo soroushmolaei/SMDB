@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 bool isRemoteImagePath(String path) =>
     path.startsWith('http://') || path.startsWith('https://');
@@ -34,7 +35,8 @@ class SmartImage extends StatelessWidget {
     if (bytes != null) {
       return Image.memory(bytes, fit: fit);
     }
-    return errorBuilder?.call(context) ?? Container(color: Colors.white10);
+    return errorBuilder?.call(context) ??
+        Container(color: context.appColors.surfaceSubtle);
   }
 
   @override

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 
@@ -36,11 +37,12 @@ Future<void> showAddToGroupDialog(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   if (collections.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
                       child: Text(
                         'No groups yet — create one below.',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(
+                            color: dialogContext.appColors.textSecondary),
                       ),
                     ),
                   ...collections.map((c) => CheckboxListTile(

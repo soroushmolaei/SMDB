@@ -500,9 +500,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         data: (data) {
           _loadIfNeeded(data);
           final themeSettings = ref.watch(themeControllerProvider);
-          final onSurface = Theme.of(context).colorScheme.onSurface;
+          final onSurface = context.appColors.textPrimary;
           final onSurfaceVariant =
-              Theme.of(context).colorScheme.onSurfaceVariant;
+              context.appColors.textSecondary;
           return _buildContent(
             themeSettings,
             onSurface,
@@ -772,10 +772,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'If TMDB does not load on your network, point this at a '
                 'local HTTP proxy from your VPN client.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -835,11 +837,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Used automatically if TMDB is unreachable or finds no '
                 'match. Different hosting than TMDB, so it may work even '
                 'when TMDB does not.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               TextField(
@@ -884,10 +888,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   ),
                 ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'TMDB key, OMDb key, and proxy are saved in smdb_config.json '
                 'next to the app, not inside the database file.',
-                style: TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(
+                    color: context.appColors.textHint,
+                    fontSize: 11),
               ),
     ];
   }
@@ -899,13 +905,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Which database file the app is using. Defaults to '
                 'library.sqlite in your Documents folder, but you can point '
                 'it at any file -- handy for keeping separate libraries '
                 '(e.g. one file for movies, one for shows) and switching '
                 'between them.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               dbPathAsync.when(
@@ -913,7 +921,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   width: double.infinity,
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.05),
+                    color: context.appColors.surfacePanel,
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
@@ -967,12 +975,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              const Text(
+              Text(
                 'Open switches to an existing file in place (nothing is '
                 'copied). Import copies an external file into your current '
                 'folder and switches to it. Export saves a backup copy '
                 'wherever you choose.',
-                style: TextStyle(color: Colors.white38, fontSize: 11),
+                style: TextStyle(
+                    color: context.appColors.textHint,
+                    fontSize: 11),
               ),
     ];
   }
@@ -987,12 +997,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Movies/shows you scan or update from now on automatically '
                 'save a small local copy of their poster/backdrop, so they '
                 'keep showing up with no internet connection. Use this to '
                 'backfill titles that were already in your library before.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1023,8 +1035,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Text(
                       'Saved ${thumbnailBackfill.downloaded} of '
                       '${thumbnailBackfill.processed}.',
-                      style: const TextStyle(
-                        color: Colors.white54,
+                      style: TextStyle(
+                        color:
+                            context.appColors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -1037,13 +1050,15 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Saves a full-resolution poster.jpg and backdrop.jpg next '
                 'to every movie file and show folder in your library -- '
                 'useful for backups, printing, or another app. This is '
                 'separate from the small thumbnails above and can take a '
                 'while and use significant disk space for a large library.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1075,8 +1090,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                       'Saved ${originalImageDownload.saved} of '
                       '${originalImageDownload.processed}'
                       '${originalImageDownload.failed > 0 ? ' (${originalImageDownload.failed} failed)' : ''}.',
-                      style: const TextStyle(
-                        color: Colors.white54,
+                      style: TextStyle(
+                        color:
+                            context.appColors.textSecondary,
                         fontSize: 12,
                       ),
                     ),
@@ -1167,10 +1183,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 ],
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'Added a new movie or episode to a folder you already '
                 'scanned? Rescan it instead of re-adding the whole folder.',
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               if (isScanning)
@@ -1185,9 +1203,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               foldersAsync.when(
                 data: (folders) {
                   if (folders.isEmpty) {
-                    return const Text(
+                    return Text(
                       'No folders added yet.',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(
+                          color: context.appColors.textSecondary),
                     );
                   }
                   return Column(
@@ -1244,11 +1263,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 "Files added here are skipped by every scan and rescan -- "
                 'use this for samples, extras, or anything else in a '
                 "library folder that shouldn't become its own entry.",
-                style: TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
               const SizedBox(height: 8),
               OutlinedButton.icon(
@@ -1260,9 +1281,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               exclusionsAsync.when(
                 data: (excluded) {
                   if (excluded.isEmpty) {
-                    return const Text(
+                    return Text(
                       'No exclusions yet.',
-                      style: TextStyle(color: Colors.white54),
+                      style: TextStyle(
+                          color: context.appColors.textSecondary),
                     );
                   }
                   return Column(

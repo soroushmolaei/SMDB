@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../utils/metadata_refresh_mode.dart';
@@ -318,14 +319,16 @@ class MediaItemView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.video_library_outlined,
-                size: 48, color: Colors.white24),
+            Icon(Icons.video_library_outlined,
+                size: 48,
+                color: context.appColors.textHint),
             const SizedBox(height: 12),
             Text(emptyTitle, style: const TextStyle(fontSize: 16)),
             if (emptySubtitle.isNotEmpty) ...[
               const SizedBox(height: 4),
               Text(emptySubtitle,
-                  style: const TextStyle(color: Colors.white54)),
+                  style: TextStyle(
+                      color: context.appColors.textSecondary)),
             ],
           ],
         ),
@@ -343,8 +346,8 @@ class MediaItemView extends StatelessWidget {
                 ? Icon(
                     selected ? Icons.check_circle : Icons.radio_button_unchecked,
                     color: selected
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white38,
+                        ? context.appColors.accent
+                        : context.appColors.textHint,
                   )
                 : SizedBox(
                     width: 40,
@@ -431,7 +434,7 @@ class SelectionActionBar extends StatelessWidget {
     final allSelected = totalCount > 0 && selectedCount == totalCount;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+      color: context.appColors.accent.withValues(alpha: 0.12),
       child: Row(
         children: [
           Text(
@@ -475,8 +478,8 @@ class SelectionActionBar extends StatelessWidget {
                     Icons.refresh,
                     size: 18,
                     color: selectedCount > 0
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.white24,
+                        ? context.appColors.accent
+                        : context.appColors.textHint,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -484,8 +487,8 @@ class SelectionActionBar extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 13,
                       color: selectedCount > 0
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.white24,
+                          ? context.appColors.accent
+                          : context.appColors.textHint,
                     ),
                   ),
                 ],

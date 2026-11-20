@@ -2,6 +2,7 @@ import 'package:drift/drift.dart' show Value;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
@@ -320,7 +321,7 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: context.appColors.surfacePanel,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -331,10 +332,10 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Search and pick the correct title. This fills in '
                       'the fields below — tap Save to apply.',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -393,15 +394,15 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                                                 errorBuilder:
                                                     (context, error, st) =>
                                                         Container(
-                                                  color: Colors.white10,
+                                                  color: context.appColors.surfaceSubtle,
                                                 ),
                                               )
                                             : Container(
-                                                color: Colors.white10,
+                                                color: context.appColors.surfaceSubtle,
                                                 alignment: Alignment.center,
-                                                child: const Icon(
+                                                child: Icon(
                                                   Icons.tv_outlined,
-                                                  color: Colors.white24,
+                                                  color: context.appColors.textHint,
                                                 ),
                                               ),
                                       ),
@@ -416,9 +417,9 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                                     ),
                                     Text(
                                       c.source,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 10,
-                                        color: Colors.white38,
+                                        color: context.appColors.textHint,
                                       ),
                                     ),
                                   ],
@@ -436,7 +437,7 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.05),
+                  color: context.appColors.surfacePanel,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Column(
@@ -447,12 +448,12 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                       style: TextStyle(fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 4),
-                    const Text(
+                    Text(
                       'Already know the right one? Set it directly. Once '
                       'set, Update on the detail page only pulls data for '
                       'this exact id — it will never re-search and land on '
                       'a different title again.',
-                      style: TextStyle(color: Colors.white54, fontSize: 12),
+                      style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
                     ),
                     const SizedBox(height: 8),
                     Row(
@@ -568,9 +569,9 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                               path: _posterPath.text,
                               fit: BoxFit.cover,
                               errorBuilder: (c) =>
-                                  Container(color: Colors.white10),
+                                  Container(color: context.appColors.surfaceSubtle),
                             )
-                          : Container(color: Colors.white10),
+                          : Container(color: context.appColors.surfaceSubtle),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -605,9 +606,9 @@ class _EditShowScreenState extends ConsumerState<EditShowScreen> {
                               path: _backdropPath.text,
                               fit: BoxFit.cover,
                               errorBuilder: (c) =>
-                                  Container(color: Colors.white10),
+                                  Container(color: context.appColors.surfaceSubtle),
                             )
-                          : Container(color: Colors.white10),
+                          : Container(color: context.appColors.surfaceSubtle),
                     ),
                   ),
                   const SizedBox(width: 10),

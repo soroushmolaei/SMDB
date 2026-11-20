@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 import 'smart_image.dart';
 
@@ -44,7 +45,7 @@ class PosterCard extends StatelessWidget {
                     decoration: selected
                         ? BoxDecoration(
                             border: Border.all(
-                              color: Theme.of(context).colorScheme.primary,
+                              color: context.appColors.accent,
                               width: 3,
                             ),
                             borderRadius: BorderRadius.circular(8),
@@ -57,9 +58,9 @@ class PosterCard extends StatelessWidget {
                               path: posterUrl!,
                               fit: BoxFit.cover,
                               thumbnailBytes: thumbnailBytes,
-                              errorBuilder: (context) => _fallback(),
+                              errorBuilder: (context) => _fallback(context),
                             )
-                          : _fallback(),
+                          : _fallback(context),
                     ),
                   ),
                 ),
@@ -79,7 +80,7 @@ class PosterCard extends StatelessWidget {
                             : Icons.radio_button_unchecked,
                         size: 20,
                         color: selected
-                            ? Theme.of(context).colorScheme.primary
+                            ? context.appColors.accent
                             : Colors.white70,
                       ),
                     ),
@@ -118,13 +119,13 @@ class PosterCard extends StatelessWidget {
     );
   }
 
-  Widget _fallback() {
+  Widget _fallback(BuildContext context) {
     return Container(
-      color: Colors.white10,
+      color: context.appColors.surfaceSubtle,
       alignment: Alignment.center,
-      child: const Icon(
+      child: Icon(
         Icons.movie_outlined,
-        color: Colors.white24,
+        color: context.appColors.textHint,
         size: 40,
       ),
     );

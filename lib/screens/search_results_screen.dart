@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../utils/search_index.dart';
@@ -58,10 +59,11 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
       body: moviesAsync.when(
         data: (movies) {
           if (_query.trim().isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 'Type something to search.',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(
+                    color: context.appColors.textSecondary),
               ),
             );
           }
@@ -92,7 +94,8 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
             return Center(
               child: Text(
                 'No results for "$_query".',
-                style: const TextStyle(color: Colors.white54),
+                style: TextStyle(
+                    color: context.appColors.textSecondary),
               ),
             );
           }
@@ -110,8 +113,10 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                   child: Text(
                     '${results.length} result'
                     '${results.length == 1 ? '' : 's'} for "$_query"',
-                    style:
-                        const TextStyle(color: Colors.white54, fontSize: 13),
+                    style: TextStyle(
+                        color:
+                            context.appColors.textSecondary,
+                        fontSize: 13),
                   ),
                 ),
               ),
@@ -121,7 +126,7 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                   sliver: SliverToBoxAdapter(
                     child: Text(
                       'MOVIES & SHOWS (${movieShowHits.length})',
-                      style: _sectionHeaderStyle,
+                      style: _sectionHeaderStyle(context),
                     ),
                   ),
                 ),
@@ -157,7 +162,7 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
                   sliver: SliverToBoxAdapter(
                     child: Text(
                       'PEOPLE (${personHits.length})',
-                      style: _sectionHeaderStyle,
+                      style: _sectionHeaderStyle(context),
                     ),
                   ),
                 ),
@@ -185,12 +190,12 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen> {
   }
 }
 
-const _sectionHeaderStyle = TextStyle(
-  fontSize: 12,
-  fontWeight: FontWeight.w700,
-  color: Colors.white54,
-  letterSpacing: 0.5,
-);
+TextStyle _sectionHeaderStyle(BuildContext context) => TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w700,
+      color: context.appColors.textSecondary,
+      letterSpacing: 0.5,
+    );
 
 class _PersonResultTile extends StatelessWidget {
   final SearchHit hit;
@@ -207,12 +212,15 @@ class _PersonResultTile extends StatelessWidget {
           children: [
             CircleAvatar(
               radius: 36,
-              backgroundColor: Colors.white10,
+              backgroundColor:
+                  context.appColors.surfaceSubtle,
               backgroundImage: hit.imagePath != null
                   ? smartImageProvider(hit.imagePath!)
                   : null,
               child: hit.imagePath == null
-                  ? const Icon(Icons.person, color: Colors.white38, size: 32)
+                  ? Icon(Icons.person,
+                      color: context.appColors.textHint,
+                      size: 32)
                   : null,
             ),
             const SizedBox(height: 6),

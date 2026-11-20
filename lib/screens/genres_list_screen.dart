@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../widgets/alphabet_index.dart';
@@ -31,7 +32,6 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
   Widget build(BuildContext context) {
     final moviesAsync = ref.watch(moviesStreamProvider);
     final shows = ref.watch(showsStreamProvider).value ?? [];
-    final colorScheme = Theme.of(context).colorScheme;
 
     return LetterIndexed(
       builder: (context, letter) => moviesAsync.when(
@@ -55,10 +55,11 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
         final genres = counts.keys.toList()..sort();
 
         if (genres.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               'No genres yet — scan a movie or show folder first.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                  color: context.appColors.textSecondary),
             ),
           );
         }
@@ -87,7 +88,8 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
                                 'all of them will be shown'
                             : '${_selected.length} selected: '
                                 '${(_selected.toList()..sort()).join(', ')}',
-                        style: const TextStyle(color: Colors.white70),
+                        style: TextStyle(
+                            color: context.appColors.textPrimary),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -124,13 +126,13 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
                   final isSelected = _selected.contains(genre);
                   return Card(
                     color: _combineMode && isSelected
-                        ? colorScheme.primary.withValues(alpha: 0.18)
-                        : Colors.white.withValues(alpha: 0.05),
+                        ? context.appColors.selectionTint
+                        : context.appColors.surfacePanel,
                     shape: _combineMode && isSelected
                         ? RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(4),
                             side: BorderSide(
-                                color: colorScheme.primary, width: 1.5),
+                                color: context.appColors.accent, width: 1.5),
                           )
                         : null,
                     child: InkWell(
@@ -158,12 +160,12 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
                                     ? Icons.check_circle
                                     : Icons.radio_button_unchecked,
                                 color: isSelected
-                                    ? colorScheme.primary
-                                    : Colors.white38,
+                                    ? context.appColors.accent
+                                    : context.appColors.textHint,
                               )
                             else
-                              const Icon(Icons.local_offer_outlined,
-                                  color: Color(0xFF9C91F5)),
+                              Icon(Icons.local_offer_outlined,
+                                  color: context.appColors.accent),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
@@ -174,8 +176,8 @@ class _GenresListScreenState extends ConsumerState<GenresListScreen> {
                             ),
                             Text(
                               '${counts[genre]}',
-                              style:
-                                  const TextStyle(color: Colors.white54),
+                              style: TextStyle(
+                                  color: context.appColors.textSecondary),
                             ),
                           ],
                         ),

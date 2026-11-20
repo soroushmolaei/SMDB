@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
+import '../theme/app_theme.dart';
 import '../utils/metadata_refresh_mode.dart';
 import '../widgets/alphabet_index.dart';
 import '../widgets/media_grid.dart';
@@ -151,18 +152,20 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.people_outline,
-                          size: 56, color: Colors.white24),
+                      Icon(Icons.people_outline,
+                          size: 56,
+                          color: context.appColors.textHint),
                       const SizedBox(height: 12),
                       Text(
                         people.isEmpty ? 'No people yet' : 'No matches',
                         style: const TextStyle(fontSize: 18),
                       ),
                       const SizedBox(height: 4),
-                      const Text(
+                      Text(
                         'Scan a movie folder with a TMDB or OMDb key set '
                         'to populate cast and crew.',
-                        style: TextStyle(color: Colors.white54),
+                        style: TextStyle(
+                            color: context.appColors.textSecondary),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -285,15 +288,17 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                                         children: [
                                           CircleAvatar(
                                             radius: 36,
-                                            backgroundColor: Colors.white10,
+                                            backgroundColor: context
+                                                .appColors.surfaceSubtle,
                                             backgroundImage:
                                                 person.photoPath != null
                                                     ? smartImageProvider(
                                                         person.photoPath!)
                                                     : null,
                                             child: person.photoPath == null
-                                                ? const Icon(Icons.person,
-                                                    color: Colors.white38,
+                                                ? Icon(Icons.person,
+                                                    color: context.appColors
+                                                        .textHint,
                                                     size: 32)
                                                 : null,
                                           ),
@@ -341,9 +346,9 @@ class _PeopleTabState extends ConsumerState<PeopleTab> {
                                             : roleLabel,
                                         maxLines: 1,
                                         overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
+                                        style: TextStyle(
                                           fontSize: 10,
-                                          color: Colors.white38,
+                                          color: context.appColors.textHint,
                                         ),
                                       ),
                                     ],

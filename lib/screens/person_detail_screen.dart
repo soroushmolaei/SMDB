@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../database/database.dart';
 import '../providers/providers.dart';
 import '../services/tmdb_service.dart';
+import '../theme/app_theme.dart';
 import '../widgets/fullscreen_image_viewer.dart';
 import 'movie_detail_screen.dart';
 import 'person_picker_dialog.dart';
@@ -197,10 +198,10 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                   top: 20, bottom: 8),
                               child: Text(
                                 title,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 13,
-                                  color: Colors.white54,
+                                  color: context.appColors.textSecondary,
                                   letterSpacing: 0.5,
                                 ),
                               ),
@@ -213,15 +214,15 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                               padding: const EdgeInsets.symmetric(
                                   horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: Colors.white10,
+                                color: context.appColors.surfaceSubtle,
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: Text(
                                 label,
-                                style: const TextStyle(
+                                style: TextStyle(
                                   fontSize: 10,
                                   fontWeight: FontWeight.w600,
-                                  color: Colors.white54,
+                                  color: context.appColors.textSecondary,
                                   letterSpacing: 0.5,
                                 ),
                               ),
@@ -232,8 +233,10 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                               children: [
                                 Text(
                                   year != null ? '$year' : '—',
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12),
+                                  style: TextStyle(
+                                      color:
+                                          context.appColors.textSecondary,
+                                      fontSize: 12),
                                 ),
                                 const SizedBox(width: 8),
                                 typeTag(label),
@@ -267,13 +270,15 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                         imageUrl: posterPath,
                                         fit: BoxFit.cover,
                                         errorWidget: (c, u, e) => Container(
-                                            color: Colors.white10),
+                                            color: context
+                                                .appColors.surfaceSubtle),
                                       )
                                     : Container(
-                                        color: Colors.white10,
+                                        color:
+                                            context.appColors.surfaceSubtle,
                                         child: Icon(
                                           fallbackIcon,
-                                          color: Colors.white24,
+                                          color: context.appColors.textHint,
                                           size: 18,
                                         ),
                                       ),
@@ -351,8 +356,10 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                     '${sorted.length} episode'
                                         '${sorted.length > 1 ? 's' : ''}',
                                   ].join(' • '),
-                                  style: const TextStyle(
-                                      color: Colors.white54, fontSize: 12),
+                                  style: TextStyle(
+                                      color:
+                                          context.appColors.textSecondary,
+                                      fontSize: 12),
                                 ),
                                 const SizedBox(width: 8),
                                 typeTag('SHOW'),
@@ -398,14 +405,17 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                           ),
                                   child: CircleAvatar(
                                     radius: 40,
-                                    backgroundColor: Colors.white10,
+                                    backgroundColor:
+                                        context.appColors.surfaceSubtle,
                                     backgroundImage: person.photoPath != null
                                         ? CachedNetworkImageProvider(
                                             person.photoPath!)
                                         : null,
                                     child: person.photoPath == null
-                                        ? const Icon(Icons.person,
-                                            size: 40, color: Colors.white38)
+                                        ? Icon(Icons.person,
+                                            size: 40,
+                                            color:
+                                                context.appColors.textHint)
                                         : null,
                                   ),
                                 ),
@@ -434,8 +444,9 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                                               if (person.placeOfBirth != null)
                                                 person.placeOfBirth!,
                                             ].join(' • '),
-                                            style: const TextStyle(
-                                                color: Colors.white54,
+                                            style: TextStyle(
+                                                color: context.appColors
+                                                    .textSecondary,
                                                 fontSize: 13),
                                           ),
                                         ),
@@ -470,11 +481,13 @@ class _PersonDetailScreenState extends ConsumerState<PersonDetailScreen> {
                               ),
                             ),
                             if (totalCredits == 0)
-                              const Padding(
-                                padding: EdgeInsets.only(top: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
                                 child: Text(
                                   'No linked movies or shows.',
-                                  style: TextStyle(color: Colors.white54),
+                                  style: TextStyle(
+                                      color: context
+                                          .appColors.textSecondary),
                                 ),
                               ),
                             if (directingCredits.isNotEmpty) ...[

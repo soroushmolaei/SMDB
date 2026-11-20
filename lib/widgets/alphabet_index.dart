@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../theme/app_theme.dart';
 
 import 'media_item.dart';
 
@@ -47,14 +48,16 @@ class AlphabetIndex extends StatelessWidget {
             child: Container(
               padding: const EdgeInsets.symmetric(vertical: 3),
               color: isSelected
-                  ? const Color(0xFF6C5CE7).withValues(alpha: 0.3)
+                  ? context.appColors.accent.withValues(alpha: 0.3)
                   : null,
               alignment: Alignment.center,
               child: Text(
                 l,
                 style: TextStyle(
                   fontSize: 11,
-                  color: isSelected ? Colors.white : Colors.white38,
+                  color: isSelected
+                      ? context.appColors.accent
+                      : context.appColors.textHint,
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
@@ -102,7 +103,8 @@ class _YearScreenState extends ConsumerState<YearScreen>
                         'them to fill this in.'
                     : 'No movies or shows yet — scan a folder first.',
                 textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white54),
+                style: TextStyle(
+                    color: context.appColors.textSecondary),
               ),
             ),
           );
@@ -198,7 +200,7 @@ class _YearScreenState extends ConsumerState<YearScreen>
                                     color: y >= start.round() &&
                                             y <= end.round()
                                         ? colorScheme.primary
-                                        : Colors.white12,
+                                        : context.appColors.surfaceSubtle,
                                     borderRadius: BorderRadius.circular(1),
                                   ),
                                 ),
@@ -226,8 +228,8 @@ class _YearScreenState extends ConsumerState<YearScreen>
                         '$missingYearCount title'
                         '${missingYearCount == 1 ? '' : 's'} without a '
                         "known year aren't shown here.",
-                        style: const TextStyle(
-                          color: Colors.white38,
+                        style: TextStyle(
+                          color: context.appColors.textHint,
                           fontSize: 11,
                         ),
                       ),

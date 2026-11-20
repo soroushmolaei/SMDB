@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../providers/providers.dart';
 import '../widgets/alphabet_index.dart';
@@ -27,10 +28,11 @@ class GenreShowsScreen extends ConsumerWidget {
           }).toList();
 
           if (filtered.isEmpty) {
-            return const Center(
+            return Center(
               child: Text(
                 'No shows in this genre',
-                style: TextStyle(color: Colors.white54),
+                style: TextStyle(
+                    color: context.appColors.textSecondary),
               ),
             );
           }

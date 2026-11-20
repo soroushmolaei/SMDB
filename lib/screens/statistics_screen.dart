@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../theme/app_theme.dart';
 
 import '../database/database.dart';
 import '../providers/providers.dart';
@@ -27,10 +28,11 @@ class StatisticsScreen extends ConsumerWidget {
     return moviesAsync.when(
       data: (movies) {
         if (movies.isEmpty && shows.isEmpty) {
-          return const Center(
+          return Center(
             child: Text(
               'No stats yet — scan a movie or show folder first.',
-              style: TextStyle(color: Colors.white54),
+              style: TextStyle(
+                  color: context.appColors.textSecondary),
             ),
           );
         }
@@ -255,7 +257,9 @@ class _StatisticsBody extends StatelessWidget {
                     child: Text(
                       '${movieRuntimes.length} of ${movies.length} movies have a '
                       'known duration — tap Update on the rest to fill this in.',
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      style: TextStyle(
+                          color: context.appColors.textHint,
+                          fontSize: 11),
                     ),
                   ),
               ],
@@ -284,7 +288,9 @@ class _StatisticsBody extends StatelessWidget {
                     child: Text(
                       '${episodeRuntimes.length} of ${episodes.length} episodes have a '
                       'known duration — tap Update on the show to fill this in.',
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      style: TextStyle(
+                          color: context.appColors.textHint,
+                          fontSize: 11),
                     ),
                   ),
               ],
@@ -360,7 +366,9 @@ class _StatisticsBody extends StatelessWidget {
                     child: Text(
                       '$unknownLanguageCount title${unknownLanguageCount == 1 ? '' : 's'} '
                       'with no language on file yet — tap Update to fill it in.',
-                      style: const TextStyle(color: Colors.white38, fontSize: 11),
+                      style: TextStyle(
+                          color: context.appColors.textHint,
+                          fontSize: 11),
                     ),
                   ),
               ],
@@ -437,9 +445,11 @@ class _StatisticsBody extends StatelessWidget {
                     mostEpisodesShow == null &&
                     topGenre.isEmpty &&
                     topLanguage.isEmpty)
-                  const Text(
+                  Text(
                     'Not enough data yet.',
-                    style: TextStyle(color: Colors.white38, fontSize: 12),
+                    style: TextStyle(
+                        color: context.appColors.textHint,
+                        fontSize: 12),
                   ),
               ],
             ),
@@ -492,10 +502,10 @@ class _SectionHeader extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 10),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 12,
           fontWeight: FontWeight.w700,
-          color: Colors.white54,
+          color: context.appColors.textSecondary,
           letterSpacing: 0.6,
         ),
       ),
@@ -514,7 +524,7 @@ class _SectionCard extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: context.appColors.surfacePanel,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -551,7 +561,7 @@ class _StatCard extends StatelessWidget {
       width: 150,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: context.appColors.surfacePanel,
         borderRadius: BorderRadius.circular(10),
       ),
       child: Column(
@@ -567,7 +577,9 @@ class _StatCard extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Colors.white54),
+            style: TextStyle(
+                fontSize: 12,
+                color: context.appColors.textSecondary),
           ),
         ],
       ),
@@ -589,7 +601,9 @@ class _StatLine extends StatelessWidget {
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(color: Colors.white70, fontSize: 13),
+              style: TextStyle(
+                  color: context.appColors.textPrimary,
+                  fontSize: 13),
             ),
           ),
           Text(
@@ -630,7 +644,9 @@ class _ProgressStat extends StatelessWidget {
               Text(label, style: const TextStyle(fontSize: 13)),
               Text(
                 '$watched / $total ($percent%)',
-                style: const TextStyle(color: Colors.white54, fontSize: 12),
+                style: TextStyle(
+                    color: context.appColors.textSecondary,
+                    fontSize: 12),
               ),
             ],
           ),
@@ -640,7 +656,8 @@ class _ProgressStat extends StatelessWidget {
             child: LinearProgressIndicator(
               value: fraction,
               minHeight: 10,
-              backgroundColor: Colors.white.withValues(alpha: 0.06),
+              backgroundColor:
+                  context.appColors.surfacePanel,
               valueColor: AlwaysStoppedAnimation<Color>(color),
             ),
           ),
@@ -659,9 +676,11 @@ class _BarList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (entries.isEmpty) {
-      return const Text(
+      return Text(
         'Not enough data yet.',
-        style: TextStyle(color: Colors.white38, fontSize: 12),
+        style: TextStyle(
+            color: context.appColors.textHint,
+            fontSize: 12),
       );
     }
     final maxValue = entries
@@ -715,7 +734,8 @@ class _BarRow extends StatelessWidget {
               child: LinearProgressIndicator(
                 value: fraction,
                 minHeight: 12,
-                backgroundColor: Colors.white.withValues(alpha: 0.06),
+                backgroundColor:
+                    context.appColors.surfacePanel,
                 valueColor: AlwaysStoppedAnimation<Color>(color),
               ),
             ),
@@ -726,7 +746,9 @@ class _BarRow extends StatelessWidget {
             child: Text(
               '$count',
               textAlign: TextAlign.right,
-              style: const TextStyle(color: Colors.white54, fontSize: 12),
+              style: TextStyle(
+                  color: context.appColors.textSecondary,
+                  fontSize: 12),
             ),
           ),
         ],
@@ -748,7 +770,8 @@ class _FactRow extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: const Color(0xFF9C91F5)),
+          Icon(icon,
+              size: 18, color: context.appColors.accent),
           const SizedBox(width: 10),
           Expanded(
             child: Text(text, style: const TextStyle(fontSize: 13)),
