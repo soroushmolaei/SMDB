@@ -390,6 +390,8 @@ class MediaItemView extends StatelessWidget {
           title: item.title,
           posterUrl: item.posterPath,
           thumbnailBytes: item.posterThumbnail,
+          year: item.year,
+          rating: item.rating,
           watched: item.watched,
           selectionMode: selectionMode,
           selected: selected,
