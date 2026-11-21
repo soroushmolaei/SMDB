@@ -639,6 +639,8 @@ class _ShowHero extends StatelessWidget {
               ],
             ),
           ),
+          ),
+          ),
           // Bottom fade: blends the hero into the content below so
           // the backdrop doesn't end in a hard edge.
           const Positioned(
