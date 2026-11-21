@@ -168,9 +168,20 @@ class ShowDetailScreen extends ConsumerWidget {
                               ),
                             ),
                           if (show.overview != null &&
-                              show.overview!.isNotEmpty)
+                              show.overview!.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Text(
+                                'SYNOPSIS',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white38,
+                                ),
+                              ),
+                            ),
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 4, 16, 0),
                               child: Text(
                                 show.overview!,
                                 style: const TextStyle(
@@ -179,6 +190,7 @@ class ShowDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                          ],
                           if (showCredits.isNotEmpty)
                             Builder(builder: (context) {
                               void onTap(int personId) =>
@@ -296,9 +308,19 @@ class ShowDetailScreen extends ConsumerWidget {
                                 ),
                                 iconColor: Colors.white70,
                                 collapsedIconColor: Colors.white70,
-                                children: seasonEpisodes
-                                    .map((ep) => _EpisodeTile(episode: ep))
-                                    .toList(),
+                                children: [
+                                  for (var i = 0;
+                                      i < seasonEpisodes.length;
+                                      i++) ...[
+                                    if (i > 0)
+                                      const Divider(
+                                        height: 1,
+                                        color: Colors.white12,
+                                      ),
+                                    _EpisodeTile(
+                                        episode: seasonEpisodes[i]),
+                                  ],
+                                ],
                               );
                             }),
                           const SizedBox(height: 32),
@@ -421,15 +443,17 @@ class _ShowHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 440,
-      child: GestureDetector(
-        // Tapping empty hero space still opens the fullscreen backdrop
-        // viewer, even though the image itself is painted a layer below.
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FullscreenImageViewer.show(
-          context,
-          backdropUrl ?? posterUrl,
-        ),
-        child: Padding(
+      child: Stack(
+        children: [
+          GestureDetector(
+            // Tapping empty hero space still opens the fullscreen backdrop
+            // viewer, even though the image itself is painted a layer below.
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FullscreenImageViewer.show(
+              context,
+              backdropUrl ?? posterUrl,
+            ),
+            child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
           child: Center(
               child: Row(
@@ -438,30 +462,31 @@ class _ShowHero extends StatelessWidget {
                   GestureDetector(
                     onTap: () =>
                         FullscreenImageViewer.show(context, posterUrl),
-                    child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
                     child: Container(
-                      width: 130,
-                      height: 195,
+                      width: 160,
+                      height: 240,
                       decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: posterUrl != null
-                          ? SmartImage(
-                              path: posterUrl!,
-                              fit: BoxFit.cover,
-                              thumbnailBytes: posterThumbnail,
-                            )
-                          : Container(color: Colors.white10),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: posterUrl != null
+                            ? SmartImage(
+                                path: posterUrl!,
+                                fit: BoxFit.cover,
+                                thumbnailBytes: posterThumbnail,
+                              )
+                            : Container(color: Colors.white10),
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 20),
                 Expanded(
                   child: Column(
@@ -473,7 +498,7 @@ class _ShowHero extends StatelessWidget {
                         maxLines: 2,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
-                          fontSize: 22,
+                          fontSize: 24,
                           fontWeight: FontWeight.bold,
                           color: Colors.white,
                           height: 1.15,
@@ -546,12 +571,12 @@ class _ShowHero extends StatelessWidget {
                             ],
                           ),
                         ),
-                      if (rating != null && rating! > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Row(
-                            children: [
-                              ScoreBadge(rating: rating, size: 40),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Row(
+                          children: [
+                            if (rating != null && rating! > 0) ...[
+                              ScoreBadge(rating: rating, size: 44),
                               const SizedBox(width: 8),
                               const Text(
                                 'User\nScore',
@@ -562,13 +587,14 @@ class _ShowHero extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              const SizedBox(width: 16),
+                              Container(
+                                width: 1,
+                                height: 32,
+                                color: Colors.white24,
+                              ),
+                              const SizedBox(width: 16),
                             ],
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 14),
-                        child: Row(
-                          children: [
                             PersonalRatingStars(
                               value: personalRating,
                               onChanged: onSetPersonalRating,
@@ -613,7 +639,26 @@ class _ShowHero extends StatelessWidget {
               ],
             ),
           ),
-        ),
+          // Bottom fade: blends the hero into the content below so
+          // the backdrop doesn't end in a hard edge.
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 90,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black54],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -632,10 +677,10 @@ class _EpisodeTile extends ConsumerWidget {
         onTap: () =>
             FullscreenImageViewer.show(context, episode.stillPath),
         child: SizedBox(
-          width: 64,
-          height: 40,
+          width: 72,
+          height: 44,
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(4),
+            borderRadius: BorderRadius.circular(6),
             child: episode.stillPath != null
                 ? CachedNetworkImage(
                     imageUrl: episode.stillPath!,

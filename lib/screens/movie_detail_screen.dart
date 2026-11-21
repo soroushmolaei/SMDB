@@ -185,9 +185,20 @@ class MovieDetailScreen extends ConsumerWidget {
                               ),
                             ),
                           if (movie.overview != null &&
-                              movie.overview!.isNotEmpty)
+                              movie.overview!.isNotEmpty) ...[
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                              child: Text(
+                                'SYNOPSIS',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white38,
+                                ),
+                              ),
+                            ),
                             Padding(
-                              padding: const EdgeInsets.all(16),
+                              padding:
+                                  const EdgeInsets.fromLTRB(16, 4, 16, 0),
                               child: Text(
                                 movie.overview!,
                                 style: const TextStyle(
@@ -196,6 +207,7 @@ class MovieDetailScreen extends ConsumerWidget {
                                 ),
                               ),
                             ),
+                          ],
                           Builder(
                             builder: (context) {
                               final allCredits =
@@ -411,15 +423,17 @@ class _MovieHero extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       height: 440,
-      child: GestureDetector(
-        // Tapping empty hero space still opens the fullscreen backdrop
-        // viewer, even though the image itself is painted a layer below.
-        behavior: HitTestBehavior.translucent,
-        onTap: () => FullscreenImageViewer.show(
-          context,
-          backdropUrl ?? posterUrl,
-        ),
-        child: Padding(
+      child: Stack(
+        children: [
+          GestureDetector(
+            // Tapping empty hero space still opens the fullscreen backdrop
+            // viewer, even though the image itself is painted a layer below.
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FullscreenImageViewer.show(
+              context,
+              backdropUrl ?? posterUrl,
+            ),
+            child: Padding(
           padding: const EdgeInsets.fromLTRB(16, 40, 16, 40),
           child: Center(
               child: Row(
@@ -427,31 +441,32 @@ class _MovieHero extends StatelessWidget {
                 children: [
                   GestureDetector(
                     onTap: () =>
-                      FullscreenImageViewer.show(context, posterUrl),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
+                        FullscreenImageViewer.show(context, posterUrl),
                     child: Container(
-                      width: 130,
-                      height: 195,
+                      width: 160,
+                      height: 240,
                       decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withValues(alpha: 0.5),
-                            blurRadius: 12,
-                            offset: const Offset(0, 4),
+                            blurRadius: 16,
+                            offset: const Offset(0, 6),
                           ),
                         ],
                       ),
-                      child: posterUrl != null
-                          ? SmartImage(
-                              path: posterUrl!,
-                              fit: BoxFit.cover,
-                              thumbnailBytes: posterThumbnail,
-                            )
-                          : Container(color: Colors.white10),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: posterUrl != null
+                            ? SmartImage(
+                                path: posterUrl!,
+                                fit: BoxFit.cover,
+                                thumbnailBytes: posterThumbnail,
+                              )
+                            : Container(color: Colors.white10),
+                      ),
                     ),
                   ),
-                ),
                 const SizedBox(width: 20),
                 Expanded(
                   child: Column(
@@ -463,7 +478,7 @@ class _MovieHero extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         text: TextSpan(
                           style: const TextStyle(
-                            fontSize: 22,
+                            fontSize: 24,
                             fontWeight: FontWeight.bold,
                             color: Colors.white,
                             height: 1.15,
@@ -549,12 +564,12 @@ class _MovieHero extends StatelessWidget {
                             ],
                           ),
                         ),
-                      if (rating != null && rating! > 0)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 14),
-                          child: Row(
-                            children: [
-                              ScoreBadge(rating: rating, size: 40),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 14),
+                        child: Row(
+                          children: [
+                            if (rating != null && rating! > 0) ...[
+                              ScoreBadge(rating: rating, size: 44),
                               const SizedBox(width: 8),
                               const Text(
                                 'User\nScore',
@@ -565,13 +580,14 @@ class _MovieHero extends StatelessWidget {
                                   fontWeight: FontWeight.w600,
                                 ),
                               ),
+                              const SizedBox(width: 16),
+                              Container(
+                                width: 1,
+                                height: 32,
+                                color: Colors.white24,
+                              ),
+                              const SizedBox(width: 16),
                             ],
-                          ),
-                        ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 14),
-                        child: Row(
-                          children: [
                             PersonalRatingStars(
                               value: personalRating,
                               onChanged: onSetPersonalRating,
@@ -632,7 +648,26 @@ class _MovieHero extends StatelessWidget {
               ],
             ),
           ),
-        ),
+          // Bottom fade: blends the hero into the content below so
+          // the backdrop doesn't end in a hard edge.
+          const Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 90,
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [Colors.transparent, Colors.black54],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
